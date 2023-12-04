@@ -1,9 +1,10 @@
 import os
+import random
 directory = './'
 
 
 def read_dataset(filename):
-    features = []  # relevant features such as : audio_valence, acousticness, danceability, energy, loudness
+    features = []  # relevant features such as : acousticness, danceability, energy, loudness, audio_valence
     labels = []  # song_popularity (what we are seeking to predict)
     filename = os.path.join(directory, filename)
     unique_name_song = set()  # to eliminate the duplicate songs
@@ -35,3 +36,22 @@ def read_dataset(filename):
 
 
 features_extraction, labels_extraction = read_dataset('song_data.csv')
+
+
+def split_lines(features, labels, seed, Train, Test):
+    random.seed(seed)
+    train = open(Train, 'w')
+    test = open(Test, 'w')
+    # adding the header to each file
+    train.write("song_popularity,acousticness,danceability,energy,loudness,audio_valence\n")
+    test.write("song_popularity,acousticness,danceability,energy,loudness,audio_valence\n")
+    # splitting into training and testing
+    for i in range(len(features)):
+        line = f"{labels[i]},{','.join(map(str, features[i]))}\n"
+        chosen = random.choice([train, test])
+        chosen.write(line)
+
+    train.close()
+    test.close()
+
+split_lines(features_extraction,labels_extraction,42,'train.csv','test.csv')
