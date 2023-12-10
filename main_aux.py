@@ -2,8 +2,6 @@
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler 
 
-
-
 def extract_and_normalize_features(list_parts):
 	#using the MinMaxScaler from sklearn.preprocessing, it takes a 2D tab so we reshape list_parts into a 2D tab 
 	list_2d = [[feature] for feature in list_parts]
