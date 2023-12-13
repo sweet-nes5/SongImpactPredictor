@@ -9,3 +9,5 @@ This project aims to predict the potential impact and popularity of songs using 
 - Predicts song popularity based on various features.
 - Utilizes machine learning algorithms for accurate predictions.
 
+## Link to the Dataset on Kaggle: 
+https://www.kaggle.com/datasets/yasserh/song-popularity-dataset
