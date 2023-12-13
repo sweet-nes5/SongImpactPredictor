@@ -139,12 +139,21 @@ def linear_regression_model():
     Y = np.array(popularity_scores)
 
     print(f"X.shape: {X.shape}")
-    #print(f"X.shape: {X.shape}")
+    print(f"Y.shape: {Y.shape}")
 
-    # Uncomment the following lines once you resolve the issue with X
-    fig = plt.figure(figsize=(8, 6))
-    plt.scatter(X[:, 0], Y, color="r", marker="o", s=30)
-    plt.title('Song popularity features')
+    # Create plots for each feature
+    features = ['song_duration', 'accousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness',
+                'loudness']
+    fig, axes = plt.subplots(nrows=2, ncols=4, figsize=(16, 8))
+    fig.suptitle('Scatter Plots for Features vs Popularity', y=1.02)
+
+    for i, ax in enumerate(axes.flatten()):
+        ax.scatter(X[:, i], Y, marker='o', s=30, alpha=0.5)
+        ax.set_title(features[i])
+        ax.set_xlabel(features[i])
+        ax.set_ylabel('Popularity Score')
+
+    plt.tight_layout()
     plt.show()
 
 
