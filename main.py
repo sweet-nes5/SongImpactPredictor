@@ -54,4 +54,5 @@ def split_lines(features, labels, seed, Train, Test):
     train.close()
     test.close()
 
-split_lines(features_extraction,labels_extraction,42,'train.csv','test.csv')
+
+split_lines(features_extraction, labels_extraction, 42, 'train.csv', 'test.csv')
