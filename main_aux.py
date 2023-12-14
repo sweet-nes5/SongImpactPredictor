@@ -1,9 +1,9 @@
 import random
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler 
-
-
-
+import seaborn as sns 
+import matplotlib.pyplot as plt 
+import pandas as pd
 
 
 """ extracts the features associated to each song title and normalizes them using module sklearn_preprocessing 
@@ -31,12 +31,12 @@ def extract_and_normalize_features(list_parts):
 
 
 
-
-""" Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
+"""Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
 	Args: filename (str)
-	returns: songs_dict (defaultdict, key= song title, value = features), score(list)
+	returns: songs_dict (defaultdict, key= song title, value = features), score(list)"""
 
-	 """
+
+
 def read_dataset(filename):
 	popularity_scores = []  # song_popularity (what we are seeking to predict), value between 0 and 100 for now ( TODO NORMALIZE THE VALUE INTO A [0,1] VALUE)
 
@@ -117,9 +117,51 @@ def split_lines(input, seed, output1, output2, ratio):
 
 
 
+#data analysis and visualization in order to gain a deeper understanding of our dataset; AND to identify the most important features 
+
+#step1: understand how the target variable (song_popularity) is distributed to see if the scores are distributed evenly or is there some inbalance in the distribution. 
+#If the latter is the case, then we have to see if there is outliers (points that are too different from the majority, unusually high or low score)
+
+"""Creates a figure (histogram ) or actives an existing one to display the distribution of one or seveal numerical variables 
+(sources: matplot.pyplot.figure, matplotlib.org, python-graph-gallery.com, seaborn.pydata.org )
+   We will be using SeaBorn to plot it using the histplot function. 
+	Args: 
+		width: float, width of the figure (in inches)
+		height: float, height of the figure (in inches too)
+		feature: string, the feature that we want to analyse 
+
+	Interpretation: 
+		- the curve has a single peak and is very smooth; it may indicate a homogenous distribution 
+	
+ """
+def visualization(feature, width, height, x_label):
+	plt.title('Distribution of feature frequency')
+	#creates a dataframe from the list feature
+	df = pd.DataFrame({x_label: feature})
+
+	#sets a grey background ()
+	sns.set(style = "darkgrid")
+	sns.histplot(data = df, x= x_label, kde = True) #if kde (Kernel Density Estimate) true, it computes a kernel density estimate to SMOOTH the distribution, if false, it will show the histogram in its raw form 
+
+	plt.xlabel(x_label)
+	plt.ylabel('Frequency')
+
+	plt.show()
+
+
+
+
+
+
+
+
+
+
+
 """we chose to use csv files for our data becasuse it is tabular with rows and columns representing different features """
 
 if __name__ == "__main__":
 	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
 	songs_dict, scores= read_dataset('train.csv')
+	visualization(scores, 8, 6, "song_popularity")
 
