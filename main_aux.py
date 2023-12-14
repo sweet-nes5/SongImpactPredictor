@@ -16,18 +16,37 @@ in order to tranform the data into [0,1] values so it will be easier to calculat
 		normalized_features_list: list containing the values of each feature but fitted to data 
 
  """
-def extract_and_normalize_features(list_parts):
+def extract_and_normalize_features(list_parts, categorical_indx=[]): 
+	#separate the numerical (continuous) and categorical (discreet) variables cause they won't be treated the same, 
+	#we exclude the categorical features from normalization  
+	num_variables = [list_parts[i] for i in range(len(list_parts)) if i not in categorical_indx]
+
+
 	#using the MinMaxScaler from sklearn.preprocessing, it takes a 2D tab so we reshape list_parts into a 2D tab 
-	list_2d = [[feature] for feature in list_parts]
-
+	list_2d = [[feature] for feature in num_variables]
 	scaler = MinMaxScaler()
-
-	normalized_features = scaler.fit_transform(list_2d) #fit to data, then transform it 
+	normalized_num_features = scaler.fit_transform(list_2d) #fit to data, then transform it 
 
 	#we re reshape it again into a list
-	normalized_features_list = [features[0] for features in normalized_features]
+	normalized_num_features_list = [features[0] for features in normalized_num_features]
 
-	return normalized_features_list
+
+	#normalisation of the categorical variables 
+	categorical_features= [list_parts[i] for i in categorical_indx]
+
+	#to preserve the orignal order
+	normalized_features = []
+	num_list_indx= 0
+
+	for i in range( len(list_parts)):
+		if i in categorical_indx:
+			normalized_features.append(list_parts[i])
+		else: 
+			normalized_features.append(normalized_num_features_list[num_list_indx])
+			num_list_indx+= 1
+
+
+	return normalized_features
 
 
 
@@ -52,7 +71,8 @@ def read_dataset(filename):
 
 			header_parts = [header.strip() for part in header.strip().split(',')]  #  ['song_name', 'song_popularity', 'song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence']			
 			lines = input_file.readlines()
-			
+			categorical_features_indeces = [0, 1, 6, 9, 12]	
+
 			for line in lines:
 				line_parts = [part.strip() for part in line.strip().split(',')]
 				song_name = line_parts[0] #song's title
@@ -60,8 +80,12 @@ def read_dataset(filename):
 				#don't add it if it's already in songs_dict
 				if song_name not in songs_dict:
 					if len(line_parts) == len(header_parts): #check that the data in each line aligns with column name
-						features_list = extract_and_normalize_features(line_parts[1:])
+						
+						line_parts_float = [float(element) for element in line_parts[1:]]
+						features_list = extract_and_normalize_features(line_parts_float, categorical_features_indeces)
+						
 						score = features_list[0]
+						
 						songs_dict[song_name] = features_list[1:]
 						popularity_scores.append(score)					
 				else:
@@ -122,39 +146,43 @@ def split_lines(input, seed, output1, output2, ratio):
 #step1: understand how the target variable (song_popularity) is distributed to see if the scores are distributed evenly or is there some inbalance in the distribution. 
 #If the latter is the case, then we have to see if there is outliers (points that are too different from the majority, unusually high or low score)
 
-"""Creates a figure (histogram ) or actives an existing one to display the distribution of one or seveal numerical variables 
+"""Creates a figure, histogram , or actives an existing one to display the distribution of the model's target variable (in this case it's the popylarity scores)
 (sources: matplot.pyplot.figure, matplotlib.org, python-graph-gallery.com, seaborn.pydata.org )
    We will be using SeaBorn to plot it using the histplot function. 
 	Args: 
-		width: float, width of the figure (in inches)
-		height: float, height of the figure (in inches too)
-		feature: string, the feature that we want to analyse 
-
-	Interpretation: 
-		- the curve has a single peak and is very smooth; it may indicate a homogenous distribution 
-	
+		feature: list of floats, the values of the feature that we want to analyse 	
+		x_label: string, label of x - axis 
  """
-def visualization(feature, width, height, x_label):
-	plt.title('Distribution of feature frequency')
-	#creates a dataframe from the list feature
-	df = pd.DataFrame({x_label: feature})
-
+def target_visualization(x_label, df, kind = 'hist', bins = 30):
+	plt.title(f"Distribution of {x_label} frequency")
 	#sets a grey background ()
 	sns.set(style = "darkgrid")
-	sns.histplot(data = df, x= x_label, kde = True) #if kde (Kernel Density Estimate) true, it computes a kernel density estimate to SMOOTH the distribution, if false, it will show the histogram in its raw form 
 
-	plt.xlabel(x_label)
+	df = df.sort_values(by=x_label)
+	if kind == 'hist':
+		#sorting the df by the feature column
+		sns.histplot(data = df, x= x_label, kde = True, bins= bins) #if kde (Kernel Density Estimate) true, it computes a kernel density estimate to SMOOTH the distribution, if false, it will show the histogram in its raw form 
+	elif kind == 'bar': #same as hist but better for categorical variables and without the curve
+		sns.countplot(data= df, x= x_label)
+	#elif kind == 'dist':
+	#	sns.distplot(df[x_label], kde = True, bins = bins, hist_kws = dict(edgecolor = "white", linewidth = 2))
+	
 	plt.ylabel('Frequency')
-
 	plt.show()
 
 
+#to show all histograms for each feature on the same figure, use this function  (EXCEPT SONG_POPULARITY since it's not contained in song_dict)
+def all_features_visualization(df, bins = 50):
+	plt.figure(figsize = (12,8))
+	sns.set(style = "darkgrid")
 
-
-
-
-
-
+	for i, column in enumerate(df.columns):
+		plt.subplot(3,5, i+1) #3 rows, 5 colums (14 features)
+		sns.histplot(data= df, x= column, kde= True, bins = bins)
+		plt.ylabel('Frequency')
+		plt.xlabel(column)
+	plt.tight_layout()
+	plt.show()
 
 
 
@@ -163,5 +191,24 @@ def visualization(feature, width, height, x_label):
 if __name__ == "__main__":
 	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
 	songs_dict, scores= read_dataset('train.csv')
-	visualization(scores, 8, 6, "song_popularity")
 
+
+	"""analyzing the distribution of the song_popularity variable contained in the list scores
+	Interpretation: 
+		- the curve has a single peak and is very smooth; it indicates a homogenous distribution """
+	x_label_popularity = "song_popularity"
+	df_popularity = pd.DataFrame({x_label_popularity: scores})
+
+	target_visualization(x_label_popularity, df_popularity, bins= 50)
+
+
+	#now we want to visualize the distribution by other features 
+	df = pd.DataFrame.from_dict(songs_dict, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+		'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'adio_valence'])
+	
+
+	x_label_feature = 'acousticness' #example, change this depending on which feature you want to visualize
+	target_visualization(x_label_feature, df, kind = 'hist', bins =60) #adjust bins depending on each feature 
+
+
+	all_features_visualization(df, bins = 10)
