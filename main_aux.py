@@ -1,11 +1,7 @@
 import random
-from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
-from sklearn import datasets
-import matplotlib.pyplot as plt
-from sklearn.model_selection import train_test_split
-from sklearn import linear_model
+
 
 
 
@@ -125,44 +121,28 @@ def split_lines(input, seed, output1, output2, ratio):
     except FileNotFoundError:
         print("File does not exist : {input}")
 
+#let's assume song_popularity[i] = alpha +(beta1 * loudness[i]) +.....+ (beta2 * danceability[i])
+# Y[i] = alpha + (beta1 * x1[i]) + ..... + (betan * xn[i]) + error
+# model : y_pred = alpha_pred + (beta1_pred * x1[i]) + ......+ (betan_pred * xn[i])
+def euclidean_dist(X_train, X_test):
+    distance = np.sqrt(np.sum(np.square(X_train - X_test), axis= 1))
+    return distance
 
-def linear_regression_model():
-    songs_dict, popularity_scores = read_dataset('train.csv')
-
-    if not songs_dict or not popularity_scores:
-        print("Error reading dataset")
-        return
-
-
-    # Convert the dictionary data to NumPy arrays
-    X = np.array([song_values[1:] for song_values in songs_dict.values()])
-    Y = np.array(popularity_scores)
-
-    print(f"X.shape: {X.shape}")
-    print(f"Y.shape: {Y.shape}")
-
-    # Create plots for each feature
-    features = ['song_duration', 'accousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness',
-                'loudness']
-    fig, axes = plt.subplots(nrows=2, ncols=4, figsize=(16, 8))
-    fig.suptitle('Scatter Plots for Features vs Popularity', y=1.02)
-
-    for i, ax in enumerate(axes.flatten()):
-        ax.scatter(X[:, i], Y, marker='o', s=30, alpha=0.5)
-        ax.set_title(features[i])
-        ax.set_xlabel(features[i])
-        ax.set_ylabel('Popularity Score')
-
-    plt.tight_layout()
-    plt.show()
+#function to predict using the KNN
+def predict(X_train, Y_train, x_test, K):
+    distances = [euclidean_dist(x_train, x_test) for x_train in X_train ]
+    nearest_indices = np.argsort(distances)[:K]
+    nearest_neighbors = Y_train[nearest_indices]
+    #retourner la moyenne des voisins predits
+    prediction = np.mean(nearest_neighbors)
+    return prediction
 
 
 """we chose to use csv files for our data becasuse it is tabular with rows and columns representing different features """
 
 if __name__ == "__main__":
-	songs_dictio, scores= read_dataset('song_data.csv')
-	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
-	linear_regression_model()
+    songs_dictio, scores= read_dataset('song_data.csv')
+    split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
 
 
 
