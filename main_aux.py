@@ -6,55 +6,48 @@ import matplotlib.pyplot as plt
 import pandas as pd
 
 
-""" extracts the features associated to each song title and normalizes them using module sklearn_preprocessing 
-in order to tranform the data into [0,1] values so it will be easier to calculate and make the results more balanced
+
+visualization = True #change value only if you want to activate the visualization analysis 
 
 
-	Args: 
-		list_parts: a list of floats (list[float])
-	returns: 
-		normalized_features_list: list containing the values of each feature but fitted to data 
+"""normalized the values of each feature of each song contained in songs_dict, using the MinMaxScaler()
+	(sources: from scikit-learn.org and medium.com 'Normalize data before or after split of training and testing data?')
+	
+	X_normalized = (X - X_min) / (X_max - X_min), normalizes the values between 0 and 1 
 
- """
-def extract_and_normalize_features(list_parts, categorical_indx=[]): 
-	#separate the numerical (continuous) and categorical (discreet) variables cause they won't be treated the same, 
-	#we exclude the categorical features from normalization  
-	num_variables = [list_parts[i] for i in range(len(list_parts)) if i not in categorical_indx]
+	Args:
+		songs_dict_train: dictionary {song_title: list of features values} of the TRAINING set
+		songs_dict_test: dictionary {song_title: list of features values} of the TEST set
+		
+	returns:
+	Both dictionaries but with normalized values 
+"""
+def normalize_dataset(songs_dict_train, songs_dict_test):
+	num_values_train = [songs_dict_train[key] for key in songs_dict_train.keys()]
+	num_values_test = [songs_dict_test[key] for key in songs_dict_test.keys()]
 
-
-	#using the MinMaxScaler from sklearn.preprocessing, it takes a 2D tab so we reshape list_parts into a 2D tab 
-	list_2d = [[feature] for feature in num_variables]
 	scaler = MinMaxScaler()
-	normalized_num_features = scaler.fit_transform(list_2d) #fit to data, then transform it 
+	normalized_num_features_train = scaler.fit_transform(num_values_train)
+	normalized_num_features_test = scaler.fit_transform(num_values_test)
 
-	#we re reshape it again into a list
-	normalized_num_features_list = [features[0] for features in normalized_num_features]
+	#reintegrate the new values into the dictionnaries
+	for indx, key in enumerate(songs_dict_train.keys()):
+		songs_dict_train[key] = list(normalized_num_features_train[indx])
 
-
-	#normalisation of the categorical variables 
-	categorical_features= [list_parts[i] for i in categorical_indx]
-
-	#to preserve the orignal order
-	normalized_features = []
-	num_list_indx= 0
-
-	for i in range( len(list_parts)):
-		if i in categorical_indx:
-			normalized_features.append(list_parts[i])
-		else: 
-			normalized_features.append(normalized_num_features_list[num_list_indx])
-			num_list_indx+= 1
+	for indx, key in enumerate(songs_dict_test.keys()):
+		songs_dict_test[key] = list(normalized_num_features_test[indx])
 
 
-	return normalized_features
 
+	#normalizing the target variable (here popularity score) should not be necessary and would actually add difficulties when interpreting the resulsts at the end 
+	#Important only if we use a Neural Network cause they're sensitive to scales
+	return songs_dict_train, songs_dict_test
+		
 
 
 """Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
 	Args: filename (str)
 	returns: songs_dict (defaultdict, key= song title, value = features), score(list)"""
-
-
 
 def read_dataset(filename):
 	popularity_scores = []  # song_popularity (what we are seeking to predict), value between 0 and 100 for now ( TODO NORMALIZE THE VALUE INTO A [0,1] VALUE)
@@ -82,8 +75,8 @@ def read_dataset(filename):
 					if len(line_parts) == len(header_parts): #check that the data in each line aligns with column name
 						
 						line_parts_float = [float(element) for element in line_parts[1:]]
-						features_list = extract_and_normalize_features(line_parts_float, categorical_features_indeces) #normalized features
-						#features_list = line_parts[1:]
+						#features_list = extract_and_normalize_features(line_parts_float, categorical_features_indeces) #normalized features
+						features_list = line_parts[1:]
 						score = features_list[0]
 						
 						songs_dict[song_name] = features_list[1:]
@@ -153,7 +146,7 @@ def split_lines(input, seed, output1, output2, ratio):
 		feature: list of floats, the values of the feature that we want to analyse 	
 		x_label: string, label of x - axis 
  """
-def target_visualization(x_label, df, kind = 'hist', bins = 30):
+def target_visualization(x_label, df, kind = 'hist', bins = None):
 	plt.title(f"Distribution of {x_label} frequency")
 	sns.set(style = "darkgrid")
 
@@ -206,27 +199,32 @@ def visualize_correlation(correlation_matrix):
 
 if __name__ == "__main__":
 	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
-	songs_dict, scores= read_dataset('train.csv')
+	songs_dict_train, scores_train = read_dataset('train.csv')
+	songs_dict_test, scores_test = read_dataset('test.csv')
+
+	songs_dict_train, songs_dict_test = normalize_dataset(songs_dict_train, songs_dict_test)
 
 
-	"""analyzing the distribution of the song_popularity variable contained in the list scores
-	Interpretation: 
-		- the curve has a single peak and is very smooth; it indicates a homogenous distribution """
-	x_label_popularity = "song_popularity"
-	df_popularity = pd.DataFrame({x_label_popularity: scores})
+	if visualization == True: 
 
-	target_visualization(x_label_popularity, df_popularity, bins= 30)
+		"""analyzing the distribution of the song_popularity variable contained in the list scores
+		Interpretation: 
+			- the curve has a single peak and is very smooth; it indicates a homogenous distribution """
+		x_label_popularity = "song_popularity"
+		df_popularity = pd.DataFrame({x_label_popularity: scores_train})
 
-
-	#now we want to visualize the distribution by other features 
-	df = pd.DataFrame.from_dict(songs_dict, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
-		'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'adio_valence'])
-	
-
-	x_label_feature = 'acousticness' #example, change this depending on which feature you want to visualize
-	target_visualization(x_label_feature, df, kind = 'hist', bins =30) #adjust bins depending on each feature 
+		target_visualization(x_label_popularity, df_popularity, bins= 30)
 
 
-	all_features_visualization(df, bins = 10)
-	corr_matrix = correlation_matrix(df)
-	visualize_correlation(corr_matrix)
+		#now we want to visualize the distribution by other features 
+		df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'adio_valence'])
+		
+
+		x_label_feature = 'acousticness' #example, change this depending on which feature you want to visualize
+		target_visualization(x_label_feature, df, kind = 'hist', bins =30) #adjust bins depending on each feature 
+
+
+		all_features_visualization(df, bins = 10)
+		corr_matrix = correlation_matrix(df)
+		visualize_correlation(corr_matrix)
