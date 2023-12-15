@@ -82,8 +82,8 @@ def read_dataset(filename):
 					if len(line_parts) == len(header_parts): #check that the data in each line aligns with column name
 						
 						line_parts_float = [float(element) for element in line_parts[1:]]
-						features_list = extract_and_normalize_features(line_parts_float, categorical_features_indeces)
-						
+						features_list = extract_and_normalize_features(line_parts_float, categorical_features_indeces) #normalized features
+						#features_list = line_parts[1:]
 						score = features_list[0]
 						
 						songs_dict[song_name] = features_list[1:]
@@ -155,7 +155,6 @@ def split_lines(input, seed, output1, output2, ratio):
  """
 def target_visualization(x_label, df, kind = 'hist', bins = 30):
 	plt.title(f"Distribution of {x_label} frequency")
-	#sets a grey background ()
 	sns.set(style = "darkgrid")
 
 	df = df.sort_values(by=x_label)
@@ -185,6 +184,23 @@ def all_features_visualization(df, bins = 50):
 	plt.show()
 
 
+#source for this (medium.com, 'How to create a Seaborn Correlation Heatmap in Python')
+
+#analyze the correlation between different features, just creates a correlation matrix of all pairs of features 
+"""how to interpret the results: """
+def correlation_matrix(df):
+	correlation_matrix = df.corr() #pandas.DataFrame.corr: Computes pairwise correlation of columns, excluding NA/null values (from pandas.pydata.org)
+	return correlation_matrix
+
+
+#creates a general heatmap of all the features' correlation for better visuals using seaborn again 
+def visualize_correlation(correlation_matrix):
+	sns.heatmap(correlation_matrix, annot = True)  #(from seaborn.pydata.org and python-graph-gallery.com)
+	plt.title('Features Correlation Heatmap')
+	plt.show()
+
+
+
 
 """we chose to use csv files for our data becasuse it is tabular with rows and columns representing different features """
 
@@ -199,7 +215,7 @@ if __name__ == "__main__":
 	x_label_popularity = "song_popularity"
 	df_popularity = pd.DataFrame({x_label_popularity: scores})
 
-	target_visualization(x_label_popularity, df_popularity, bins= 50)
+	target_visualization(x_label_popularity, df_popularity, bins= 30)
 
 
 	#now we want to visualize the distribution by other features 
@@ -208,7 +224,9 @@ if __name__ == "__main__":
 	
 
 	x_label_feature = 'acousticness' #example, change this depending on which feature you want to visualize
-	target_visualization(x_label_feature, df, kind = 'hist', bins =60) #adjust bins depending on each feature 
+	target_visualization(x_label_feature, df, kind = 'hist', bins =30) #adjust bins depending on each feature 
 
 
 	all_features_visualization(df, bins = 10)
+	corr_matrix = correlation_matrix(df)
+	visualize_correlation(corr_matrix)
