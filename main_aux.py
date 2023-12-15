@@ -50,7 +50,7 @@ def one_hot_encode(songs_dict, categorical_features):
 	returns:
 	Both dictionaries but with normalized values 
 """
-def normalize_dataset(x_train, x_test, feature_to_remove):
+def normalize_dataset(x_train, x_test):
 	#normalizing num values with MinMax Scaler 
 	num_values_train = [x_train[key] for key in x_train.keys()]
 	num_values_test = [x_test[key] for key in x_test.keys()]
@@ -70,12 +70,12 @@ def normalize_dataset(x_train, x_test, feature_to_remove):
 	#??? don't knwo how to do that for now and some articles say that it's not necessary to do that so we'll try and see 
 
 
-	#reintegrate the new values into the dictionnaries 
+	#reintegrate the new values into the dictionnaries
 
 	for indx, key in enumerate(x_train.keys()):
 		for indx_feature, feature in enumerate(x_train[key].keys()):
 
-			if feature not in categorical_features and key != feature_to_remove:
+			if feature not in categorical_features:
 				x_train[key][feature] = normalized_num_features_train[indx][indx_feature]
 			else:
 				continue #will keep the hot one encoded value
@@ -83,7 +83,7 @@ def normalize_dataset(x_train, x_test, feature_to_remove):
 	for indx, key in enumerate(x_test.keys()):
 		for indx_feature, feature in enumerate(x_test[key].keys()):
 
-			if feature not in categorical_features and key != feature_to_remove:
+			if feature not in categorical_features:
 				x_test[key][feature] = normalized_num_features_test[indx][indx_feature]
 			else:
 				continue #will keep the hot one encoded value
@@ -268,14 +268,16 @@ def visualize_correlation_with_popularity(df, popularity_scores):
 
 if __name__ == "__main__":
 	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
-
 	songs_dict_train, scores_train = read_dataset('train.csv')
+	limit = 0
+
 	songs_dict_test, scores_test = read_dataset('test.csv')
 
-
+	songs_dict_train, songs_dict_test = normalize_dataset(songs_dict_train, songs_dict_test)
+	
+	#using one hot encoding for categorical variables
+	
 	if visualization == True: 
-		songs_dict_train, songs_dict_test = normalize_dataset(songs_dict_train, songs_dict_test, remove_feature= '') #withput removing any feature to show the correlation between all the features before optimisation
-
 		df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
 			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode_1', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
 
@@ -299,11 +301,8 @@ if __name__ == "__main__":
 
 		visualize_correlation_with_popularity(df, scores_train)
 
-	#the visuals show that instrumentalness has a lot of values at 0.0 and does not influence song_popularity a lot so we exclude it from our data processing
-	#Exclude instumentalness from the data frame
-	songs_dict_train, songs_dict_test = normalize_dataset(songs_dict_train, songs_dict_test, feature_to_remove = 'instrumentalness')
-	
+	#the visuals show that instrumentalness has a lot of values at 0.0 and does not influence song_popularity
 
-	
+
 	if debug == True: 
 		affichage_utiles(songs_dict_train, scores_train, songs_dict_test, scores_test)
