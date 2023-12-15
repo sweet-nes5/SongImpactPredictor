@@ -4,46 +4,96 @@ from sklearn.preprocessing import MinMaxScaler
 import seaborn as sns 
 import matplotlib.pyplot as plt 
 import pandas as pd
-
+from sklearn.linear_model import LinearRegression
+import numpy as np 
+from sklearn.metrics import mean_squared_error
 
 
 visualization = True #change value only if you want to activate the visualization analysis 
+debug = False #change this value only if you want to activate the fnctions for debugging
 
 
-"""normalized the values of each feature of each song contained in songs_dict, using the MinMaxScaler()
+
+def affichage_utiles(x_train, y_train, x_test, y_test): #for debug
+	print(f"key 'FAKE LOVE': {x_train['FAKE LOVE']}")
+	
+	print(f"\nkey 'Dynamite': {x_test['Dynamite']}")
+	
+	print("test y : ", y_test[0])
+	print("train y : ", y_train[0])
+
+	print(len(x_train['FAKE LOVE']))
+
+
+def one_hot_encode(songs_dict, categorical_features):
+	df = pd.DataFrame.from_dict(songs_dict, orient='index', columns= ['song_duration', 'acousticness', 'danceability', 'energy', 
+			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
+
+	df_encoded = pd.get_dummies(df, columns = categorical_features, drop_first= True)
+	songs_dict_encoded = df_encoded.to_dict(orient = 'index')
+
+	return songs_dict_encoded
+
+
+"""normalized the values of each feature of each song contained in songs_dict, using the MinMaxScaler() 
+	and uses one-hot encoding for values tthat are categorical (0 or 1) 
+
+
 	(sources: from scikit-learn.org and medium.com 'Normalize data before or after split of training and testing data?')
 	
 	X_normalized = (X - X_min) / (X_max - X_min), normalizes the values between 0 and 1 
 
 	Args:
-		songs_dict_train: dictionary {song_title: list of features values} of the TRAINING set
-		songs_dict_test: dictionary {song_title: list of features values} of the TEST set
+		x_train: dictionary {song_title: list of features values} of the TRAINING set
+		x_test: dictionary {song_title: list of features values} of the TEST set
 		
 	returns:
 	Both dictionaries but with normalized values 
 """
-def normalize_dataset(songs_dict_train, songs_dict_test):
-	num_values_train = [songs_dict_train[key] for key in songs_dict_train.keys()]
-	num_values_test = [songs_dict_test[key] for key in songs_dict_test.keys()]
+def normalize_dataset(x_train, x_test):
+	#normalizing num values with MinMax Scaler 
+	num_values_train = [x_train[key] for key in x_train.keys()]
+	num_values_test = [x_test[key] for key in x_test.keys()]
 
 	scaler = MinMaxScaler()
 	normalized_num_features_train = scaler.fit_transform(num_values_train)
 	normalized_num_features_test = scaler.fit_transform(num_values_test)
 
+
+	#for categorical_features, we'll use the one-hot encoding function (features that have only 1 or 0 values, here it's audio_mode)
+	#transformation too 
+	categorical_features = ['audio_mode']
+	x_train= one_hot_encode(x_train, categorical_features)
+	x_test = one_hot_encode(x_test, categorical_features)
+
+	#for ordinal values like key[1, 2, ..., 11] and time_signature [0,1,2,3,4,5], we will try to convert them into numerical values
+	#??? don't knwo how to do that for now and some articles say that it's not necessary to do that so we'll try and see 
+
+
 	#reintegrate the new values into the dictionnaries
-	for indx, key in enumerate(songs_dict_train.keys()):
-		songs_dict_train[key] = list(normalized_num_features_train[indx])
 
-	for indx, key in enumerate(songs_dict_test.keys()):
-		songs_dict_test[key] = list(normalized_num_features_test[indx])
+	for indx, key in enumerate(x_train.keys()):
+		for indx_feature, feature in enumerate(x_train[key].keys()):
 
+			if feature not in categorical_features:
+				x_train[key][feature] = normalized_num_features_train[indx][indx_feature]
+			else:
+				continue #will keep the hot one encoded value
+
+	for indx, key in enumerate(x_test.keys()):
+		for indx_feature, feature in enumerate(x_test[key].keys()):
+
+			if feature not in categorical_features:
+				x_test[key][feature] = normalized_num_features_test[indx][indx_feature]
+			else:
+				continue #will keep the hot one encoded value
+		
 
 
 	#normalizing the target variable (here popularity score) should not be necessary and would actually add difficulties when interpreting the resulsts at the end 
 	#Important only if we use a Neural Network cause they're sensitive to scales
-	return songs_dict_train, songs_dict_test
+	return x_train, x_test
 		
-
 
 """Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
 	Args: filename (str)
@@ -164,6 +214,7 @@ def target_visualization(x_label, df, kind = 'hist', bins = None):
 
 
 #to show all histograms for each feature on the same figure, use this function  (EXCEPT SONG_POPULARITY since it's not contained in song_dict)
+#interpretation: we can see that the instrumentalness feature does not tell us a lot and has a lot of values at 0.0 which could influence badly our model
 def all_features_visualization(df, bins = 50):
 	plt.figure(figsize = (12,8))
 	sns.set(style = "darkgrid")
@@ -193,6 +244,24 @@ def visualize_correlation(correlation_matrix):
 	plt.show()
 
 
+#creates a heatmap to show the correlation between the scores of popularity and the other features to see which ones are the most influent
+#interpretation: we can see that instrumentalness has the lowest correlation with song_popularity
+def visualize_correlation_with_popularity(df, popularity_scores):
+	#adding the scores to the df since they're separated outside this function 
+	df['song_popularity'] = popularity_scores
+	correlation_matrix = df.corr()
+
+	#creating the heatmap 
+	sns.heatmap(correlation_matrix[['song_popularity']], annot = True, vmin= -1, vmax= 1) #VMIN 
+	plt.title('Correlation between Song Popularity and Other Features')
+	plt.show()
+
+
+
+#Model Training, here x_train must be normalized 
+
+
+
 
 
 """we chose to use csv files for our data becasuse it is tabular with rows and columns representing different features """
@@ -200,12 +269,17 @@ def visualize_correlation(correlation_matrix):
 if __name__ == "__main__":
 	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
 	songs_dict_train, scores_train = read_dataset('train.csv')
+	limit = 0
+
 	songs_dict_test, scores_test = read_dataset('test.csv')
 
 	songs_dict_train, songs_dict_test = normalize_dataset(songs_dict_train, songs_dict_test)
-
-
+	
+	#using one hot encoding for categorical variables
+	
 	if visualization == True: 
+		df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode_1', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
 
 		"""analyzing the distribution of the song_popularity variable contained in the list scores
 		Interpretation: 
@@ -217,14 +291,15 @@ if __name__ == "__main__":
 
 
 		#now we want to visualize the distribution by other features 
-		df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
-			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'adio_valence'])
-		
-
-		x_label_feature = 'acousticness' #example, change this depending on which feature you want to visualize
-		target_visualization(x_label_feature, df, kind = 'hist', bins =30) #adjust bins depending on each feature 
+		#x_label_feature = 'acousticness' #example, change this depending on which feature you want to visualize
+		#target_visualization(x_label_feature, df, kind = 'hist', bins =30) #adjust bins depending on each feature 
 
 
 		all_features_visualization(df, bins = 10)
 		corr_matrix = correlation_matrix(df)
 		visualize_correlation(corr_matrix)
+
+		visualize_correlation_with_popularity(df, scores_train)
+
+	if debug == True: 
+		affichage_utiles(songs_dict_train, scores_train, songs_dict_test, scores_test)
