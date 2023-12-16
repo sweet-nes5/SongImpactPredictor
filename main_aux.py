@@ -192,6 +192,23 @@ def all_features_visualization(df, bins=50):
     plt.tight_layout()
     plt.show()
 
+
+'''
+1.Scale the data ...done to make sure that no column will dominate the others in the cluster
+2. init random centroids
+3.label each data point 
+4. update centroids 
+5. repeat 3 and 4 until centroids stop changing --> converginf'''
+
+songs = pd.read_csv("song_data.csv")
+features = ["acousticness","danceability","energy","instrumentalness","key","liveness","loudness","audio_mode"]
+songs = songs.dropna(subset=features)
+songs = songs.drop_duplicates(subset=features)
+songs = ((songs - songs.min()) / (songs.max() - songs.min())) * 9 + 1
+print(songs)
+
+
+
 if __name__ == "__main__":
     split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.75)
     songs_dict, scores = read_dataset('train.csv')
@@ -206,5 +223,5 @@ if __name__ == "__main__":
     #target_visualization(x_label_feature, df, kind='hist', bins=60)
 
     #all_features_visualization(df, bins=10)
-    linear_regression_loop()
+    #linear_regression_loop()
 
