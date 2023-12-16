@@ -45,7 +45,7 @@ def backward(params, x, lr, grad):
     return params
 
 lr = 1e-4
-epoch = 50000
+epoch = 30000
 def linear_regression_loop():
     params = init_params(train_x.shape[1])
 
@@ -55,11 +55,21 @@ def linear_regression_loop():
 
         params = backward(params, train_x, lr, grad)
 
-        if i% 5000 == 0:
+        if i % 5000 == 0:
             predictions = forward(params, valid_x)
             valid_loss = mse(valid_y, predictions)
-            print(f"Epoch {i} loss: {valid_loss}")
+            #print(f"Epoch {i} loss: {valid_loss}")
 
+
+
+    # Make predictions on the test set
+    predictions_test = forward(params, test_x)
+
+    # Calculate MSE and MAE on the test set
+    test_mse = mse(test_y, predictions_test)
+    test_mae = mean_absolute_error(test_y, predictions_test)
+    print(f"Test MSE: {test_mse}")
+    print(f"Test MAE: {test_mae}")
 
 if __name__ == "__main__":
     linear_regression_loop()
