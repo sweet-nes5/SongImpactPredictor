@@ -1,92 +1,67 @@
 import random
 from sklearn.preprocessing import MinMaxScaler
 import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
 
 
+def extract_and_normalize_features(list_parts, categorical_indx=[]):
+    num_variables = [list_parts[i] for i in range(len(list_parts)) if i not in categorical_indx]
 
+    list_2d = [[feature] for feature in num_variables]
+    scaler = MinMaxScaler()
+    normalized_num_features = scaler.fit_transform(list_2d)
 
+    normalized_num_features_list = [features[0] for features in normalized_num_features]
 
+    categorical_features = [list_parts[i] for i in categorical_indx]
 
+    normalized_features = []
+    num_list_indx = 0
 
-""" extracts the features associated to each song title and normalizes them using module sklearn_preprocessing 
-in order to tranform the data into [0,1] values so it will be easier to calculate and make the results more balanced
+    for i in range(len(list_parts)):
+        if i in categorical_indx:
+            normalized_features.append(list_parts[i])
+        else:
+            normalized_features.append(normalized_num_features_list[num_list_indx])
+            num_list_indx += 1
 
-
-	Args: 
-		list_parts: a list of floats (list[float])
-	returns: 
-		normalized_features_list: list containing the values of each feature but fitted to data 
-
- """
-def extract_and_normalize_features(list_parts):
-	# using the MinMaxScaler from sklearn.preprocessing, it takes a 2D tab so we reshape list_parts into a 2D tab
-	list_2d = [[feature] for feature in list_parts]
-	scaler = MinMaxScaler()
-	normalized_features = scaler.fit_transform(list_2d)  # fit to data, then transform it
-	# we re reshape it again into a list
-	normalized_features_list = [features[0] for features in normalized_features]
-	return normalized_features_list
-
-
-
-""" Parameters: filename (str)
-	returns: songs_dict (defaultdict, key= song title, value = features), score(list) """
-
-
-
-""" Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
-	Args: filename (str)
-	returns: songs_dict (defaultdict, key= song title, value = features), score(list)
-
-	 """
+    return normalized_features
 
 
 def read_dataset(filename):
-    popularity_scores = []  # song_popularity (what we are seeking to predict), value between 0 and 100 for now ( TODO NORMALIZE THE VALUE INTO A [0,1] VALUE)
-
-    # create a dictionnary {(song title, features)}
+    popularity_scores = []
     songs_dict = {}
 
     try:
         with open(filename, 'r') as input_file:
             header = input_file.readline()
             if not header:
-                print("input file is empty")
-                return  # incase the file is empty
+                print("Input file is empty")
+                return None, None
 
-            header_parts = [header.strip() for part in header.strip().split(
-                ',')]  # ['song_name', 'song_popularity', 'song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence']
             lines = input_file.readlines()
 
             for line in lines:
                 line_parts = [part.strip() for part in line.strip().split(',')]
-                song_name = line_parts[0]  # song's title
+                song_name = line_parts[0]
 
-                # don't add it if it's already in songs_dict
                 if song_name not in songs_dict:
-                    if len(line_parts) == len(header_parts):  # check that the data in each line aligns with column name
-                        features_list = extract_and_normalize_features(line_parts[1:])
+                    if len(line_parts) == len(header.split(',')):
+                        features_list = extract_and_normalize_features(
+                            line_parts[1:])
                         score = features_list[0]
                         songs_dict[song_name] = features_list[1:]
                         popularity_scores.append(score)
                 else:
                     continue
-            return songs_dict, popularity_scores
+
+        return songs_dict, popularity_scores
 
     except FileNotFoundError:
-        print("File does not exist: {filename}")
-
-
-""" Separates the data set into two sub-sets: training_set and test_set. Pseudo-randomly
-	Args: 
-		input: string, name of the input file containg our dataset (file)
-		seed: integer, the seed of the pseudo-random generator uses. using the same seed and same input generates the same outputs (but do we want that ?), and using different seeds generates different results 
-		output1: string, name of the first output file 
-		output2: string, name of the second output file 
-		ratio: float between 0 and 1, to get the size of the output1 file (for example ratio= 0.65 if we want a ratio of 65% training and 35% test)
-
- """
-
+        print(f"File does not exist: {filename}")
+        return None, None
 
 def split_lines(input, seed, output1, output2, ratio):
     try:
@@ -94,16 +69,14 @@ def split_lines(input, seed, output1, output2, ratio):
             random.seed(seed)
             header = input_file.readline()
             if not header:
-                return  # in case the file is empty
+                return
 
             lines = input_file.readlines()
 
-            # counting the size of each file with the given ratio:
             input_size = len(lines)
-            output1_capacity = int(
-                input_size * ratio)  # Training set size, which makes the size of the test size as: input_size - training_set_size
+            output1_capacity = int(input_size * ratio)
             output2_capacity = input_size - output1_capacity
-            random.shuffle(lines)  # shuffles the lines randomly
+            random.shuffle(lines)
 
             with open(output1, 'w') as out1, open(output2, 'w') as out2:
                 out1.write(header)
@@ -111,39 +84,127 @@ def split_lines(input, seed, output1, output2, ratio):
                 for line in lines:
                     if random.randint(0, 1) and output1_capacity > 0:
                         out1.write(line)
-                        output1_capacity -= 1  # at each line written on this file, we decrease its capacity
+                        output1_capacity -= 1
                     elif output2_capacity > 0:
                         out2.write(line)
                         output2_capacity -= 1
                     else:
                         out1.write(line)
                         output1_capacity -= 1
+
     except FileNotFoundError:
-        print("File does not exist : {input}")
+        print(f"File does not exist: {input}")
 
-#let's assume song_popularity[i] = alpha +(beta1 * loudness[i]) +.....+ (beta2 * danceability[i])
-# Y[i] = alpha + (beta1 * x1[i]) + ..... + (betan * xn[i]) + error
-# model : y_pred = alpha_pred + (beta1_pred * x1[i]) + ......+ (betan_pred * xn[i])
-def euclidean_dist(X_train, X_test):
-    distance = np.sqrt(np.sum(np.square(X_train - X_test), axis= 1))
-    return distance
+def init_params(features):  # initialize weights and the bias for our predictors(features)
+    np.random.seed(3)
+    weights = np.random.rand(features, 1) # nfeature weights between 0 and 1
+    bias = np.ones((1, 1))
+    return [weights, bias]
 
-#function to predict using the KNN
-def predict(X_train, Y_train, x_test, K):
-    distances = [euclidean_dist(x_train, x_test) for x_train in X_train ]
-    nearest_indices = np.argsort(distances)[:K]
-    nearest_neighbors = Y_train[nearest_indices]
-    #retourner la moyenne des voisins predits
-    prediction = np.mean(nearest_neighbors)
+def forward(params , x):  # make predicts using weights and bias
+    weights, bias = params
+    prediction = x @ weights + bias  # w1*x1 = w2*x2 .....
     return prediction
 
+def loss_function(actual, predicted): # mean squared error
+    return  np.mean((actual - predicted)**2)
 
-"""we chose to use csv files for our data becasuse it is tabular with rows and columns representing different features """
+def loss_grad(actual, predicted):  #calcule our gradient
+    return (predicted - actual)
+
+def backward(params, x, lr, grad):
+    #x1 * g, x2 *g , x3*g
+    w_grad = (x.T / x.shape[0]) @ grad  # calculate the derivative, the x.shape[0] is averaging the error across the rows
+    b_grad = np.mean(grad, axis=0)   # the gradient for all our rows gets averaged
+    print("Shape of params[0]:", params[0].shape)
+    print("Shape of w_grad:", w_grad.shape)
+    params[0] -= w_grad * lr
+    params[1] -= b_grad * lr
+    return params
+
+def split_train_val():
+    # Separate the training data to training and validation
+    split_lines('train.csv', 52, 'train.csv', 'validation.csv', 0.65)
+
+    # Read training data
+    train_songs_dict, train_popularity_scores = read_dataset('train.csv')
+
+    # Read validation data
+    val_songs_dict, val_popularity_scores = read_dataset('validation.csv')
+
+    # Check if the datasets are loaded successfully
+    if train_songs_dict is not None and val_songs_dict is not None:
+        # Extract features from dictionaries
+        X_train = np.array([list(train_songs_dict[song_name]) for song_name in train_songs_dict])
+        Y_train = np.array(train_popularity_scores)
+
+        X_val = np.array([list(val_songs_dict[song_name]) for song_name in val_songs_dict])
+        Y_val = np.array(val_popularity_scores)
+
+        return (X_train, Y_train), (X_val, Y_val)
+    else:
+        return None, None
+
+(train_data, val_data) = split_train_val()
+if train_data is not None:
+    # Extract X_train and Y_train from the tuple
+    X_train, Y_train = train_data
+if val_data is not None:
+    # Extract X_train and Y_train from the tuple
+    X_val, Y_val = val_data
+
+lr = 1e-4
+epoch = 100 # each time we pass the data into the algorithm it's called an epoch
+def linear_regression_loop(): # until the error gets low enough, running for a 100 epochs
+    params = init_params(X_train.shape[1])
+    for i in range(epoch):
+        predictons = forward(params, X_train)
+        grad = loss_grad(Y_train, predictons)
+        params = backward(params, X_train, lr, grad)
+
+        if i % 10 == 0:
+            predictions = forward(params, X_val)
+            valid_loss =loss_function(Y_val , predictions)
+            print(f"Epock{i} loss : {valid_loss}")
+
+def target_visualization(x_label, df, kind='hist', bins=30):
+    plt.title(f"Distribution of {x_label} frequency")
+    sns.set(style="darkgrid")
+
+    df = df.sort_values(by=x_label)
+    if kind == 'hist':
+        sns.histplot(data=df, x=x_label, kde=True, bins=bins)
+    elif kind == 'bar':
+        sns.countplot(data=df, x=x_label)
+
+    plt.ylabel('Frequency')
+    plt.show()
+
+def all_features_visualization(df, bins=50):
+    plt.figure(figsize=(12, 8))
+    sns.set(style="darkgrid")
+
+    for i, column in enumerate(df.columns):
+        plt.subplot(3, 5, i + 1)
+        sns.histplot(data=df, x=column, kde=True, bins=bins)
+        plt.ylabel('Frequency')
+        plt.xlabel(column)
+    plt.tight_layout()
+    plt.show()
 
 if __name__ == "__main__":
-    songs_dictio, scores= read_dataset('song_data.csv')
-    split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
+    split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.75)
+    songs_dict, scores = read_dataset('train.csv')
 
+    x_label_popularity = "song_popularity"
+    df_popularity = pd.DataFrame({x_label_popularity: scores})
+    target_visualization(x_label_popularity, df_popularity, bins=50)
 
+    #df = pd.DataFrame.from_dict(songs_dict, orient='index', columns=['song_duration', 'acousticness', 'danceability', 'energy','instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
 
+    x_label_feature = 'acousticness'
+    #target_visualization(x_label_feature, df, kind='hist', bins=60)
+
+    #all_features_visualization(df, bins=10)
+    linear_regression_loop()
 
