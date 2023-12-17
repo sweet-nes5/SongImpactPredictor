@@ -3,6 +3,8 @@ import numpy as np
 import random
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler 
+from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import RobustScaler
 import seaborn as sns 
 import pandas as pd
 from sklearn.linear_model import LinearRegression
@@ -11,14 +13,18 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import KFold
 from sklearn.metrics import mean_absolute_error
-
-
-
 from sklearn.metrics import mean_squared_error
 import math 
+from sklearn.impute import SimpleImputer
+
+#Target encoding for song_popularity ?? (high categorical data )
+
 
 visualization = False #change value only if you want to activate the visualization analysis 
 debug = False #change this value only if you want to activate the fnctions for debugging
+feature_names = ['song_duration', 'acousticness', 'danceability', 'energy', 
+                 'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 
+                 'speechiness', 'tempo', 'time_signature', 'audio_valence']
 
 """shape of songs_dict:
 key 'FAKE LOVE': {'song_duration': 0.1218993209862618, 'acousticness': 0.002679361088284217, 'danceability': 0.5364381198792584, 'energy': 0.7205889743203178, 
@@ -28,14 +34,15 @@ key 'FAKE LOVE': {'song_duration': 0.1218993209862618, 'acousticness': 0.0026793
 """ 
 
 def affichage_utiles(x_train, y_train, x_test, y_test): #for debug
-	print(f"key 'FAKE LOVE': {x_train['FAKE LOVE']}")
 	
-	print(f"\nkey 'Dynamite': {x_test['Dynamite']}")
+	print(f"key 'FAKE LOVE': {x_test['FAKE LOVE']}") #change the name of the songs, cause the lines are shuffled each time you execute the code, so the song might not be in this subset anymore 
+	
+	print(f"\nkey 'Dynamite': {x_train['Dynamite']}")
 	
 	print("test y : ", y_test[0])
 	print("train y : ", y_train[0])
 
-	print(len(x_train['FAKE LOVE']))
+	print(len(x_test['FAKE LOVE']))
 
 #APPLY TO THIS COLUMN TRANFORMATION!!!!
 
@@ -46,6 +53,37 @@ def fit_data(songs_dict):
 	songs_dict_encoded = df.to_dict(orient = 'index')
 
 	return songs_dict_encoded
+
+
+#possible to use pd.get_dummies() from scikit learn too 
+def one_hot_encode(songs_dict, feature):
+
+	if feature not in songs_dict[next(iter(songs_dict))]: #error handling
+		print(f"Feature {feature} was not found in the dictionary.")
+		return songs_dict
+
+	#for the categorical features, we must create a new column for each unique value!  for example: audio_mode_1 and audio_mode_2, key_1, key_2, ...etc
+	unique_values = set()
+
+	for song in songs_dict.values():
+		unique_values.add(song[feature])
+
+	#creates new columns with the indeces as the unique values 
+	value_to_index = {value: i for i, value in enumerate(unique_values)}
+
+	#adds the new columns to the dictionary
+	for song_title, song_data in songs_dict.items():
+
+		feature_value = song_data[feature]
+		encoding_indeces = [0] * len(unique_values)
+
+		encoding_indeces[value_to_index[feature_value]] = 1 
+
+		for i, index in enumerate(encoding_indeces):
+			songs_dict[song_title][f"{feature}_{i}"] = index
+
+	return songs_dict
+
 
 
 """normalized the values of each feature of each song contained in songs_dict, using the MinMaxScaler() 
@@ -63,15 +101,14 @@ def fit_data(songs_dict):
 	returns:
 	Both dictionaries but with normalized values 
 """
-def normalize_dataset(x_train, x_test, categorical_features= ['audio_mode']):
+def normalizer(x_train, x_test, y_train, y_test ,categorical_features= ['audio_mode'], scaler_type = 0): #if Scaler is 0 it uses MInMax, 1 it uses  Standard 
 	#normalizing num values with MinMax Scaler 
-	#num_values_train = [x_train[key] for key in x_train.keys()]
-	#num_values_test = [x_test[key] for key in x_test.keys()]
+	
 	#convert dictionnaries to dataframes :
 	df_train = pd.DataFrame.from_dict(x_train, orient = 'index')
 	df_test = pd.DataFrame.from_dict(x_test, orient = 'index')
 
-
+	#we extract the numerical values (excluding categorical values that should not be normalized but one-hot encoded instead) into lists that are comptatible with our scaler
 	num_columns = [col for col in df_train.columns if col not in categorical_features]
 	num_values_train = df_train[num_columns].values 
 	num_values_test = df_test[num_columns].values
@@ -79,10 +116,17 @@ def normalize_dataset(x_train, x_test, categorical_features= ['audio_mode']):
 
 
 	#normalize the numerical (continues values) features
-	scaler = MinMaxScaler()
-	normalized_num_features_train = scaler.fit_transform(num_values_train)
-	normalized_num_features_test = scaler.transform(num_values_test) #using the same scaler for the test subset
+	if scaler_type == 0:
+		scaler = MinMaxScaler()
+	elif scaler_type == 1:
+		scaler = StandardScaler()
+	else:
+		print(f"Invalid scaler_type. Use 0 for MinMaxScaler or 1 for StandardScaler")
+		return x_train, x_test
 
+	normalized_num_features_train = scaler.fit_transform(num_values_train) #we fit first for the train subset 
+	normalized_num_features_test = scaler.transform(num_values_test) #using the same scaler for the test subset
+	
 
 	#for ordinal values like key[1, 2, ..., 11] and time_signature [0,1,2,3,4,5], we will try to convert them into numerical values
 	#??? don't knwo how to do that for now and some articles say that it's not necessary to do that so we'll try and see 
@@ -95,8 +139,23 @@ def normalize_dataset(x_train, x_test, categorical_features= ['audio_mode']):
 	for i, feature in enumerate(num_columns):
 		df_test[feature] = normalized_num_features_test[:, i]
 
+	#bining for the target variable (  binning the popularity scores into categories (0-25, 25-50, 50-75, 75-100) ) 
+	bins = [-1, 25, 50, 75, 101]
+	labels = [0, 1, 2, 3] #(labels of each bin)
 
-	return df_train.to_dict(orient = 'index'), df_test.to_dict(orient = 'index')
+	y_train_binned = pd.cut(y_train, bins = bins, labels = labels)
+	y_test_binned = pd.cut(y_test, bins = bins, labels = labels)
+
+
+	df_train.columns = feature_names
+	df_test.columns = feature_names
+
+	return df_train.to_dict(orient = 'index'), df_test.to_dict(orient = 'index'), y_train_binned, y_test_binned
+
+
+
+
+
 
 """Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
 	Args: filename (str)
@@ -318,14 +377,45 @@ def identify_outliers(x_train):
 #interpretation: we can observe an asymetry between the values for the features 'acousticness', 'key' and 'liveness' 
 #on peut corriger les outliers, qui ont des valeurs aberrantes (trop élévés ou trop basses) et les rendre moins influentes
 #on peut les remplacer par les medianes ou bien en appliquant une transformation logarithmique dessus 
-def correct_outliers(x_train, feature): #A CORRIGER 
-	df = pd.DataFrame.from_dict(x_train, orient = "index", columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
-			 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
-	
-	df[feature] = np.log1p(df[feature])
-	for key, values in df.to_dict(orient='index').items():
-		x_train[key][feature] = values[feature]
+def correct_outliers1(x_train, feature): 
+
+	feature_values = [values[feature] for values in x_train.values()]
+
+	scaler = RobustScaler()
+	scaled_values = scaler.fit_transform(np.array(feature_values).reshape(-1, 1)).flatten()
+
+	for (key, value), scaled_value in zip(x_train.items(), scaled_values):
+		x_train[key][feature] = scaled_value
+
 	return x_train
+
+
+def correct_outliers_iqr(x_train, feature):
+	df = pd.DataFrame.from_dict(x_train, orient="index", columns=['song_duration', 'acousticness', 'danceability', 'energy',
+                                                                   'instrumentalness', 'key', 'liveness', 'loudness',
+                                                                   'audio_mode', 'speechiness', 'tempo', 'time_signature',
+                                                                   'audio_valence'])
+
+	#calculate the q1 and q3 
+	q1 = df[feature].quantile(0.25)
+	q3 = df[feature].quantile(0.75)
+
+	#calculate the iqr for this feature
+	IQR = q3 -  q1 
+
+	#lower and upper bounds for outliers 
+	lower = q1 - 1.5*IQR 
+	upper = q3 + 1.5*IQR 
+
+	#remove Nan values 
+	df = df[(df[feature] >= lower) & (df[feature] <= upper)]
+
+	x_train = df.to_dict(orient= 'index')
+	return x_train
+
+
+
+
 
 
 
@@ -537,15 +627,40 @@ def linear_regression_loop_with_cross_validation(X, y, epoch=10000, lr=0.001, n_
 
 if __name__ == "__main__":
 	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.8)
-	songs_dict_train, scores_train = read_dataset('train.csv')
 
+	songs_dict_train, scores_train = read_dataset('train.csv')
 	songs_dict_test, scores_test = read_dataset('test.csv')
 
-	songs_dict_train, songs_dict_test = normalize_dataset(songs_dict_train, songs_dict_test)
-	
+
 	df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
 			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
+	print("check null values before normalization\n")
+	print(df.isnull().sum())
 
+	#impute NaN values in scores: 
+	imputer = SimpleImputer(strategy='mean')
+
+	scores_train = np.array(scores_train)
+	scores_test = np.array(scores_test)
+
+	scores_train= imputer.fit_transform(scores_train.reshape(-1, 1)).flatten()
+	scores_test = imputer.fit_transform(scores_test.reshape(-1, 1)).flatten()
+
+	songs_dict_train, songs_dict_test, scores_train, scores_test = normalizer(songs_dict_train, songs_dict_test, scores_train, scores_test, scaler_type = 1)
+	
+	#songs_dict_train = one_hot_encode(songs_dict_train, 'audio_mode')
+	#songs_dict_train = correct_outliers_iqr(songs_dict_train, 'liveness')
+	#songs_dict_test = correct_outliers_iqr(songs_dict_test, 'liveness')
+
+	#songs_dict_train = correct_outliers1(songs_dict_train, 'liveness')
+	#songs_dict_test = correct_outliers1(songs_dict_test, 'liveness')
+
+
+
+	df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
+	print("\ncheck null values after\n") 
+	print(df.isnull().sum())
 	
 
 
@@ -571,15 +686,15 @@ if __name__ == "__main__":
 
 		visualize_correlation_with_popularity(df, scores_train)
 
+		
 		identify_outliers(songs_dict_train)
+	#remove_feature(df, 'instrumentalness', [songs_dict_train, songs_dict_test])
+	
 
-		songs_dict_train_log = correct_outliers(songs_dict_train, 'liveness')
-		identify_outliers(songs_dict_train_log)
+	#songs_dict_train_log = correct_outliers(songs_dict_train, 'liveness')
+	#identify_outliers(songs_dict_train_log)	
 
 	#the visuals show that instrumentalness has a lot of values at 0.0 and does not influence song_popularity
-	remove_feature(df, 'instrumentalness', [songs_dict_train, songs_dict_test])
-	if debug == True: 
-		affichage_utiles(songs_dict_train, scores_train, songs_dict_test, scores_test)
 	#accousticness also have a lot of null values, should we remove it too ? 
 	#let's analyse its correlation with the target feature: 
 
@@ -596,8 +711,10 @@ if __name__ == "__main__":
 	y_pred = linreg.predict(songs_test)
 
 	accuracy = r2_score(scores_test_array, y_pred)
+	mse = mean_squared_error(scores_test, y_pred)
+	print(f"Regression : Mean Squared Error: {mse}")
 
-	print(accuracy)
+	print("Regression : r2_score: ", accuracy)
 
 
 
@@ -608,21 +725,21 @@ if __name__ == "__main__":
 	tree_reg = DecisionTreeRegressor()
 
 	# Fit the model on the training data
-	tree_reg.fit(song_features, scores_train_array)
+	tree_reg.fit(song_features, scores_train)
 
 	# Make predictions on the test data
 	predictions = tree_reg.predict(songs_test)
 
 	# Evaluate the model using Mean Squared Error (MSE)
-	mse = mean_squared_error(scores_test_array, predictions)
-	print(f"Mean Squared Error: {mse}")
+	mse = mean_squared_error(scores_test, predictions)
+	print(f"\nDecision Tree: Mean Squared Error: {mse}")
 		
 
 	accuracy = r2_score(scores_test_array, predictions)
 
-	print(accuracy)
+	print("Decision Tree, r2_score: ", accuracy)
 
-
+#les résultats de la régression sont meilleurs que l'arbre de décision 
 
 
 
