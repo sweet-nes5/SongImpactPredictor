@@ -42,7 +42,6 @@ def affichage_utiles(x_train, y_train, x_test, y_test): #for debug
 def fit_data(songs_dict):
 	df = pd.DataFrame.from_dict(songs_dict, orient='index', columns= ['song_duration', 'acousticness', 'danceability', 'energy', 
 			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
-	print(df)
 	#df_encoded = pd.get_dummies(df, columns = categorical_features, drop_first= True)
 	songs_dict_encoded = df.to_dict(orient = 'index')
 
@@ -64,41 +63,40 @@ def fit_data(songs_dict):
 	returns:
 	Both dictionaries but with normalized values 
 """
-def normalize_dataset(x_train, x_test):
+def normalize_dataset(x_train, x_test, categorical_features= ['audio_mode']):
 	#normalizing num values with MinMax Scaler 
-	num_values_train = [x_train[key] for key in x_train.keys()]
-	num_values_test = [x_test[key] for key in x_test.keys()]
+	#num_values_train = [x_train[key] for key in x_train.keys()]
+	#num_values_test = [x_test[key] for key in x_test.keys()]
+	#convert dictionnaries to dataframes :
+	df_train = pd.DataFrame.from_dict(x_train, orient = 'index')
+	df_test = pd.DataFrame.from_dict(x_test, orient = 'index')
 
+
+	num_columns = [col for col in df_train.columns if col not in categorical_features]
+	num_values_train = df_train[num_columns].values 
+	num_values_test = df_test[num_columns].values
+
+
+
+	#normalize the numerical (continues values) features
 	scaler = MinMaxScaler()
 	normalized_num_features_train = scaler.fit_transform(num_values_train)
-	normalized_num_features_test = scaler.fit_transform(num_values_test)
+	normalized_num_features_test = scaler.transform(num_values_test) #using the same scaler for the test subset
 
-
-
-	x_train= fit_data(x_train)
-	x_test = fit_data(x_test)
 
 	#for ordinal values like key[1, 2, ..., 11] and time_signature [0,1,2,3,4,5], we will try to convert them into numerical values
 	#??? don't knwo how to do that for now and some articles say that it's not necessary to do that so we'll try and see 
 
-	categorical_features= ['audio_mode']
 	#reintegrate the new values into the dictionnaries
 
-	for indx, key in enumerate(x_train.keys()):
-		for indx_feature, feature in enumerate(x_train[key].keys()):
-			if feature not in categorical_features:
-				x_train[key][feature] = normalized_num_features_train[indx][indx_feature]
-			else:
-				continue #will keep the hot one encoded value
+	for i , feature in enumerate(num_columns):
+		df_train[feature] = normalized_num_features_train[:, i]
 
-	for indx, key in enumerate(x_test.keys()):
-		for indx_feature, feature in enumerate(x_test[key].keys()):
+	for i, feature in enumerate(num_columns):
+		df_test[feature] = normalized_num_features_test[:, i]
 
-			if feature not in categorical_features:
-				x_test[key][feature] = normalized_num_features_test[indx][indx_feature]
-			else:
-				continue #will keep the hot one encoded value
-	return x_train, x_test
+
+	return df_train.to_dict(orient = 'index'), df_test.to_dict(orient = 'index')
 
 """Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
 	Args: filename (str)
@@ -119,7 +117,7 @@ def read_dataset(filename):
 
 			header_parts = [part.strip() for part in header.strip().split(',')]  #  ['song_name', 'song_popularity', 'song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence']			
 			lines = input_file.readlines()
-			categorical_features_indeces = [0, 1, 6, 9, 12]	
+
 
 			for line in lines:
 				line_parts = [part.strip() for part in line.strip().split(',')]
@@ -157,8 +155,10 @@ def read_dataset(filename):
 def split_lines(input, seed, output1, output2, ratio): 
 	try: 
 		with open(input, 'r') as input_file: 
+
 			random.seed(seed)
 			header = input_file.readline()
+
 			if not header:
 				return #in case the file is empty
 
@@ -166,15 +166,20 @@ def split_lines(input, seed, output1, output2, ratio):
 
 			#counting the size of each file with the given ratio: 
 			input_size= len(lines)
+
 			output1_capacity = int(input_size * ratio)  #Training set size, which makes the size of the test size as: input_size - training_set_size 			
 			output2_capacity = input_size - output1_capacity
+
 			random.shuffle(lines) #shuffles the lines randomly 
 			
 			with open(output1, 'w') as out1, open(output2, 'w') as out2:
 				out1.write(header)
 				out2.write(header)
+
 				for line in lines:
-					if random.randint(0, 1) and output1_capacity > 0:
+					selected_output = random.choices([out1, out2], weights = [ratio, 1 - ratio])[0]
+
+					if selected_output == out1 and output1_capacity > 0:
 							out1.write(line)
 							output1_capacity -= 1 #at each line written on this file, we decrease its capacity 
 					elif output2_capacity > 0:
@@ -184,7 +189,7 @@ def split_lines(input, seed, output1, output2, ratio):
 						out1.write(line)
 						output1_capacity -= 1
 	except FileNotFoundError: 
-		print("File does not exist : {input}")
+		print(f"File does not exist : {input}")
 
 
 """THIS PART IS ABOUT EDA (Exploratory Data Analysis) 
@@ -531,9 +536,8 @@ def linear_regression_loop_with_cross_validation(X, y, epoch=10000, lr=0.001, n_
 """we chose to use csv files for our data becasuse it is tabular with rows and columns representing different features """
 
 if __name__ == "__main__":
-	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.65)
+	split_lines('song_data.csv', 56, 'train.csv', 'test.csv', 0.8)
 	songs_dict_train, scores_train = read_dataset('train.csv')
-	limit = 0
 
 	songs_dict_test, scores_test = read_dataset('test.csv')
 
@@ -567,10 +571,10 @@ if __name__ == "__main__":
 
 		visualize_correlation_with_popularity(df, scores_train)
 
-	identify_outliers(songs_dict_train)
+		identify_outliers(songs_dict_train)
 
-	songs_dict_train_log = correct_outliers(songs_dict_train, 'liveness')
-	identify_outliers(songs_dict_train_log)
+		songs_dict_train_log = correct_outliers(songs_dict_train, 'liveness')
+		identify_outliers(songs_dict_train_log)
 
 	#the visuals show that instrumentalness has a lot of values at 0.0 and does not influence song_popularity
 	remove_feature(df, 'instrumentalness', [songs_dict_train, songs_dict_test])
@@ -628,7 +632,7 @@ if __name__ == "__main__":
 
 
 # Example usage
-	linear_regression_loop_with_cross_validation(songs_dict_train, scores_train)
+	#linear_regression_loop_with_cross_validation(songs_dict_train, scores_train)
 
 
 
