@@ -9,6 +9,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import r2_score
 from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import KFold
+from sklearn.metrics import mean_absolute_error
 
 
 
@@ -320,13 +322,16 @@ def correct_outliers(x_train, feature): #A CORRIGER
 		x_train[key][feature] = values[feature]
 	return x_train
 
+
+
+########################################################################################################################################
 #Model Training 
 #we'll use a multi linear regression model but first we have to create a linear regression model 
 
 def fit_linear_regression(x, y, learning_rate = 0.00001, epsilon= 0.9):
 	"""Fit a linear regression using gradient descent
 	Args: 
-		x: must be songs_dict in my case songs_dict= { 'song_title': {'feature1': value, 'feature2': value, .....}, 'song_title': {...}, ...}
+		x: must be songs_dict in my case songs_dict= { 'song_itle': {'feature1': value, 'feature2': value, .....}, 'song_title': {...}, ...}
 		y: must be the popularity scores in my case 
 		leanring_rate: tje learning rate factor number 
 		epsilon: float, the error threshold, when the error is lesser than the epsilon then the model converged
@@ -362,6 +367,165 @@ def fit_linear_regression(x, y, learning_rate = 0.00001, epsilon= 0.9):
 
 
 
+############################################################################################"""
+def linear_regression_loop():
+    params = init_params(train_x.shape[1])
+
+    for i in range(epoch):
+        predictions = forward(params, train_x)
+        grad = mse_grad(train_y, predictions)
+
+        params = backward(params, train_x, lr, grad)
+
+        if i % 5000 == 0:
+            predictions = forward(params, valid_x)
+            valid_loss = mse(valid_y, predictions)
+            #print(f"Epoch {i} loss: {valid_loss}")
+
+
+
+    # Make predictions on the test set
+    predictions_test = forward(params, test_x)
+
+    # Calculate MSE and MAE on the test set
+    test_mse = mse(test_y, predictions_test)
+    test_mae = mean_absolute_error(test_y, predictions_test)
+    print(f"Test MSE: {test_mse}")
+    print(f"Test MAE: {test_mae}")
+
+def mse(actual, predicted): # mean squared error
+    return  np.mean((actual - predicted)**2)
+def mse_grad(actual, predicted):  #calcule our gradient
+    return (predicted - actual)
+
+def init_params(features):  # initialize weights and the bias for our predictors(features)
+    np.random.seed(3)
+    weights = np.random.rand(features, 1) # nfeature weights between 0 and 1
+    biases = np.ones((1, 1))
+    return [weights, biases]
+
+def forward(params , x):  # make predicts using weights and bias
+    weights, bias = params
+    prediction = x @ weights + bias  # w1*x1 = w2*x2 .....
+    return prediction
+
+#def cross_validation(model, X, y, n_splits=5, random_state=42):
+
+
+def linear_regression_loop(train_x, train_y, valid_x, valid_y, test_x, test_y, epoch = 10000, lr= 0.001):
+	 # Initialize parameters
+    params = init_params(train_x.shape[1])
+
+    for i in range(epoch):
+        # Forward pass
+        predictions = forward(params, train_x)
+        
+        # Compute gradient
+        grad = mse_grad(train_y, predictions)
+
+        # Backward pass
+        params = backward(params, train_x, lr, grad)
+
+        if i % 5000 == 0:
+            # Evaluate on the validation set
+            predictions = forward(params, valid_x)
+            valid_loss = mean_squared_error(valid_y, predictions)
+            print(f"Epoch {i} loss: {valid_loss}")
+
+    # Make predictions on the test set
+    predictions_test = forward(params, test_x)
+
+    # Calculate MSE and MAE on the test set
+    test_mse = mean_squared_error(test_y, predictions_test)
+    test_mae = mean_absolute_error(test_y, predictions_test)
+    print(f"Test MSE: {test_mse}")
+    print(f"Test MAE: {test_mae}")
+
+######################################################################################
+
+def linear_regression_loop_with_cross_validation(X, y, epoch=10000, lr=0.001, n_splits=5, random_state=42):
+	kf = KFold(n_splits=n_splits, shuffle=True, random_state=random_state)
+	test_mse_scores = []
+	test_mae_scores = []
+
+	X = np.array(X)  # Convert X to a NumPy array if it's not already
+	y = np.array(y)  # Convert y to a NumPy array if it's not already
+
+
+	for fold, (train_index, test_index) in enumerate(kf.split(X)):
+		X_train, X_valid = X[train_index], X[test_index]
+		y_train, y_valid = y[train_index], y[test_index]
+
+		# Initialize parameters*
+		params = init_params(len(X_train[0]))
+
+		for i in range(epoch):
+
+		# Forward pass
+			predictions_train = forward(params, X_train)
+			
+			# Compute gradient
+			grad_train = mse_grad(y_train, predictions_train)
+			# Backward pass
+
+			params = backward(params, X_train, lr, grad_train)
+
+			if i % 5000 == 0:
+			# Evaluate on the validation set
+
+				predictions_valid = forward(params, X_valid)
+				valid_loss = mean_squared_error(y_valid, predictions_valid)
+
+				print(f"Fold {fold + 1}, Epoch {i} validation loss: {valid_loss}")
+
+		# Make predictions on the test se
+
+		predictions_test = forward(params, X[test_index])
+
+		# Calculate MSE and MAE on the test set
+
+		test_mse = mean_squared_error(y[test_index], predictions_test)
+		test_mae = mean_absolute_error(y[test_index], predictions_test)
+
+		test_mse_scores.append(test_mse)
+		test_mae_scores.append(test_mae)
+
+		print(f"\nFold {fold + 1} Test MSE: {test_mse}")
+
+		print(f"Fold {fold + 1} Test MAE: {test_mae}")
+
+	# Print average scores
+	print("\nAverage Scores:")
+	print(f"Average Test MSE: {np.mean(test_mse_scores)}")
+	print(f"Average Test MAE: {np.mean(test_mae_scores)}")	
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 """we chose to use csv files for our data becasuse it is tabular with rows and columns representing different features """
@@ -379,6 +543,9 @@ if __name__ == "__main__":
 			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
 
 	
+
+
+
 	if visualization == True: 
 		"""analyzing the distribution of the song_popularity variable contained in the list scores
 		Interpretation: 
@@ -450,3 +617,20 @@ if __name__ == "__main__":
 	accuracy = r2_score(scores_test_array, predictions)
 
 	print(accuracy)
+
+
+
+
+
+
+
+
+
+
+# Example usage
+	linear_regression_loop_with_cross_validation(songs_dict_train, scores_train)
+
+
+
+
+
