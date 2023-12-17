@@ -1,18 +1,29 @@
+import matplotlib.pyplot as plt 
+import numpy as np 
 import random
 from collections import defaultdict
 from sklearn.preprocessing import MinMaxScaler 
 import seaborn as sns 
-import matplotlib.pyplot as plt 
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-import numpy as np 
+from sklearn.metrics import r2_score
+from sklearn.tree import DecisionTreeRegressor
 from sklearn.metrics import mean_squared_error
 
 
-visualization = True #change value only if you want to activate the visualization analysis 
+
+from sklearn.metrics import mean_squared_error
+import math 
+
+visualization = False #change value only if you want to activate the visualization analysis 
 debug = False #change this value only if you want to activate the fnctions for debugging
 
+"""shape of songs_dict:
+key 'FAKE LOVE': {'song_duration': 0.1218993209862618, 'acousticness': 0.002679361088284217, 'danceability': 0.5364381198792584, 'energy': 0.7205889743203178, 
+'instrumentalness': 0.0, 'key': 0.18181818181818182, 'liveness': 0.30254089085485025, 'loudness': 0.8407892676306311, 'speechiness': 0.0, 'tempo': 0.016111473982146744, 
+'time_signature': 0.13577612198562228, 'audio_valence': 0.75, 'audio_mode_1': 0.3331249348754819}
 
+""" 
 
 def affichage_utiles(x_train, y_train, x_test, y_test): #for debug
 	print(f"key 'FAKE LOVE': {x_train['FAKE LOVE']}")
@@ -24,13 +35,14 @@ def affichage_utiles(x_train, y_train, x_test, y_test): #for debug
 
 	print(len(x_train['FAKE LOVE']))
 
+#APPLY TO THIS COLUMN TRANFORMATION!!!!
 
-def one_hot_encode(songs_dict, categorical_features):
+def fit_data(songs_dict):
 	df = pd.DataFrame.from_dict(songs_dict, orient='index', columns= ['song_duration', 'acousticness', 'danceability', 'energy', 
 			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
-
-	df_encoded = pd.get_dummies(df, columns = categorical_features, drop_first= True)
-	songs_dict_encoded = df_encoded.to_dict(orient = 'index')
+	print(df)
+	#df_encoded = pd.get_dummies(df, columns = categorical_features, drop_first= True)
+	songs_dict_encoded = df.to_dict(orient = 'index')
 
 	return songs_dict_encoded
 
@@ -60,21 +72,18 @@ def normalize_dataset(x_train, x_test):
 	normalized_num_features_test = scaler.fit_transform(num_values_test)
 
 
-	#for categorical_features, we'll use the one-hot encoding function (features that have only 1 or 0 values, here it's audio_mode)
-	#transformation too 
-	categorical_features = ['audio_mode']
-	x_train= one_hot_encode(x_train, categorical_features)
-	x_test = one_hot_encode(x_test, categorical_features)
+
+	x_train= fit_data(x_train)
+	x_test = fit_data(x_test)
 
 	#for ordinal values like key[1, 2, ..., 11] and time_signature [0,1,2,3,4,5], we will try to convert them into numerical values
 	#??? don't knwo how to do that for now and some articles say that it's not necessary to do that so we'll try and see 
 
-
+	categorical_features= ['audio_mode']
 	#reintegrate the new values into the dictionnaries
 
 	for indx, key in enumerate(x_train.keys()):
 		for indx_feature, feature in enumerate(x_train[key].keys()):
-
 			if feature not in categorical_features:
 				x_train[key][feature] = normalized_num_features_train[indx][indx_feature]
 			else:
@@ -87,13 +96,7 @@ def normalize_dataset(x_train, x_test):
 				x_test[key][feature] = normalized_num_features_test[indx][indx_feature]
 			else:
 				continue #will keep the hot one encoded value
-		
-
-
-	#normalizing the target variable (here popularity score) should not be necessary and would actually add difficulties when interpreting the resulsts at the end 
-	#Important only if we use a Neural Network cause they're sensitive to scales
 	return x_train, x_test
-		
 
 """Reads data from input file and makes it readable for the model by creating a dictionary of songs with song_title as a key and a list of floats representing features as values
 	Args: filename (str)
@@ -112,7 +115,7 @@ def read_dataset(filename):
 				print("input file is empty")
 				return  #incase the file is empty
 
-			header_parts = [header.strip() for part in header.strip().split(',')]  #  ['song_name', 'song_popularity', 'song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence']			
+			header_parts = [part.strip() for part in header.strip().split(',')]  #  ['song_name', 'song_popularity', 'song_duration_ms', 'acousticness', 'danceability', 'energy', 'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence']			
 			lines = input_file.readlines()
 			categorical_features_indeces = [0, 1, 6, 9, 12]	
 
@@ -182,7 +185,11 @@ def split_lines(input, seed, output1, output2, ratio):
 		print("File does not exist : {input}")
 
 
+"""THIS PART IS ABOUT EDA (Exploratory Data Analysis) 
+about eda: its purpose is to gain information and intuition about the data; to make comparisons between distributions; for making sure the data is on the scalre we expect it to be, and in the format it should be in; 
+to find where data is missing and if there are outliers, and to summarize the data. (source: from the book 'Doing Data Science by Cathy O'Neil and Rachel Schutt') 
 
+"""
 
 #data analysis and visualization in order to gain a deeper understanding of our dataset; AND to identify the most important features 
 
@@ -257,8 +264,101 @@ def visualize_correlation_with_popularity(df, popularity_scores):
 	plt.show()
 
 
+def remove_feature(df, feature, dictionaries):
+	#remove the feature from the dataframe first 
+	df = df.drop(columns = [feature])
 
-#Model Training, here x_train must be normalized 
+	#update all the song_dicts
+	for dictionary in dictionaries : 
+		for key in dictionary:
+			if feature in dictionary[key]:
+				del dictionary[key][feature]
+
+
+
+"""finds the outliers in our dataset, Creates a boxPlot from the library SeaBorn (source: python-graph-gallery and freecodecamp.com 'How to Build a Linear Regression Model – Machine Learning Example')
+	
+"""
+def identify_outliers(x_train):
+	#orient is the orientation of the data, means that the keys of the dictionnaries will be used as the index of the data frame
+	df = pd.DataFrame.from_dict(x_train, orient = "index", columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
+
+	#they're all numerical columns 
+	all_features = df.columns
+	num_features =  len(all_features)
+	num_cols = math.ceil(num_features / 2) #2 is the number of rows 
+
+
+	
+	#we create subplots so that we can compare multiple boxplots side by side, each representing a different numerical column of our DataFrame
+	fig, ax = plt.subplots(2, num_cols, figsize=(15, 6), dpi= 100)
+
+	#sns.boxplot(x = df["song_duration"])
+	#display of all the columns boxplot side by side by iterating through each column (feature), we also get the indx of the column 
+	for i, feature in enumerate(all_features):
+		x = i // num_cols
+		y = i % num_cols
+
+		#iterate throuhh each feature and create its subplot
+		sns.boxplot(x = df[feature], ax = ax[x, y])
+		ax[x, y].set_xlabel(feature, size= 14)
+		#ax[x, y].tick_params(axis = 'x', rotation = 45)
+
+	plt.tight_layout()
+	plt.show()
+
+#interpretation: we can observe an asymetry between the values for the features 'acousticness', 'key' and 'liveness' 
+#on peut corriger les outliers, qui ont des valeurs aberrantes (trop élévés ou trop basses) et les rendre moins influentes
+#on peut les remplacer par les medianes ou bien en appliquant une transformation logarithmique dessus 
+def correct_outliers(x_train, feature): #A CORRIGER 
+	df = pd.DataFrame.from_dict(x_train, orient = "index", columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+			 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
+	
+	df[feature] = np.log1p(df[feature])
+	for key, values in df.to_dict(orient='index').items():
+		x_train[key][feature] = values[feature]
+	return x_train
+
+#Model Training 
+#we'll use a multi linear regression model but first we have to create a linear regression model 
+
+def fit_linear_regression(x, y, learning_rate = 0.00001, epsilon= 0.9):
+	"""Fit a linear regression using gradient descent
+	Args: 
+		x: must be songs_dict in my case songs_dict= { 'song_title': {'feature1': value, 'feature2': value, .....}, 'song_title': {...}, ...}
+		y: must be the popularity scores in my case 
+		leanring_rate: tje learning rate factor number 
+		epsilon: float, the error threshold, when the error is lesser than the epsilon then the model converged
+
+	returns: 
+		nb.array: Array wih the regression weights 
+
+	"""
+
+
+	#Step 1 : Insert a new column with ones for y-intercept 
+	regression = np.c_[x, np.ones(len(x))]
+
+	#Step 2: Declare the weights with the same width than x 
+	weights = np.ones(regression.shape[1])
+
+	#Step 3: Implement gradient descent 
+	norma = 1 
+	while (norma > epsilon ):
+		#Step 3.1 compute the partial 
+		y_pref = regression @ weights.T 
+		partiel = regression.T @ (y - y_pred)
+		#step 3.2: compute the norma
+		norma = np.sum(np.sqrt(np.quare(partial)))
+
+		#step 3.3 ajust the weights 
+		weights = weights.T + (learning_rate * partial)
+		if(np.isnan(norma)):
+			warnings.warn('the model diverged, try to use smaller learning rate')
+	return weights 
+
+
 
 
 
@@ -275,18 +375,17 @@ if __name__ == "__main__":
 
 	songs_dict_train, songs_dict_test = normalize_dataset(songs_dict_train, songs_dict_test)
 	
-	#using one hot encoding for categorical variables
+	df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
+
 	
 	if visualization == True: 
-		df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
-			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode_1', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
-
 		"""analyzing the distribution of the song_popularity variable contained in the list scores
 		Interpretation: 
 			- the curve has a single peak and is very smooth; it indicates a homogenous distribution """
 		x_label_popularity = "song_popularity"
 		df_popularity = pd.DataFrame({x_label_popularity: scores_train})
-
+		
 		target_visualization(x_label_popularity, df_popularity, bins= 30)
 
 
@@ -301,8 +400,53 @@ if __name__ == "__main__":
 
 		visualize_correlation_with_popularity(df, scores_train)
 
+	identify_outliers(songs_dict_train)
+
+	songs_dict_train_log = correct_outliers(songs_dict_train, 'liveness')
+	identify_outliers(songs_dict_train_log)
+
 	#the visuals show that instrumentalness has a lot of values at 0.0 and does not influence song_popularity
-
-
+	remove_feature(df, 'instrumentalness', [songs_dict_train, songs_dict_test])
 	if debug == True: 
 		affichage_utiles(songs_dict_train, scores_train, songs_dict_test, scores_test)
+	#accousticness also have a lot of null values, should we remove it too ? 
+	#let's analyse its correlation with the target feature: 
+
+
+	
+	song_features = np.array([list(song.values()) for song in songs_dict_train.values()], dtype = np.float64)
+	scores_train_array = np.array(scores_train, dtype = np.float64)
+	scores_test_array = np.array(scores_test, dtype = np.float64)
+
+	linreg = LinearRegression()
+	linreg.fit(song_features ,scores_train_array)
+
+	songs_test = np.array([list(song.values()) for song in songs_dict_test.values()], dtype = np.float64)
+	y_pred = linreg.predict(songs_test)
+
+	accuracy = r2_score(scores_test_array, y_pred)
+
+	print(accuracy)
+
+
+
+#decision tree 
+
+
+	# Create a DecisionTreeRegressor
+	tree_reg = DecisionTreeRegressor()
+
+	# Fit the model on the training data
+	tree_reg.fit(song_features, scores_train_array)
+
+	# Make predictions on the test data
+	predictions = tree_reg.predict(songs_test)
+
+	# Evaluate the model using Mean Squared Error (MSE)
+	mse = mean_squared_error(scores_test_array, predictions)
+	print(f"Mean Squared Error: {mse}")
+		
+
+	accuracy = r2_score(scores_test_array, predictions)
+
+	print(accuracy)
