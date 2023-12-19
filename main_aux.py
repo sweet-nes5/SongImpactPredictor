@@ -20,7 +20,7 @@ from sklearn.impute import SimpleImputer
 #Target encoding for song_popularity ?? (high categorical data )
 
 
-visualization = False #change value only if you want to activate the visualization analysis 
+visualization = True#change value only if you want to activate the visualization analysis 
 debug = False #change this value only if you want to activate the fnctions for debugging
 feature_names = ['song_duration', 'acousticness', 'danceability', 'energy', 
                  'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 
@@ -56,7 +56,7 @@ def fit_data(songs_dict):
 
 
 #possible to use pd.get_dummies() from scikit learn too 
-def one_hot_encode(songs_dict, feature):
+def one_hot_encode(songs_dict, feature):  #source: 'Using Categorical Date with One Hot Encoding" on kaggle.com
 
 	if feature not in songs_dict[next(iter(songs_dict))]: #error handling
 		print(f"Feature {feature} was not found in the dictionary.")
@@ -65,7 +65,7 @@ def one_hot_encode(songs_dict, feature):
 	#for the categorical features, we must create a new column for each unique value!  for example: audio_mode_1 and audio_mode_2, key_1, key_2, ...etc
 	unique_values = set()
 
-	for song in songs_dict.values():
+	for song in songs_dict.values(): #each unique value is now associated with a unique index. Encodes categorical values into numerical indices 
 		unique_values.add(song[feature])
 
 	#creates new columns with the indeces as the unique values 
@@ -73,36 +73,35 @@ def one_hot_encode(songs_dict, feature):
 
 	#adds the new columns to the dictionary
 	for song_title, song_data in songs_dict.items():
-
+		#retrieves the value of the specified feature and converts it to a numerical index 
 		feature_value = song_data[feature]
 		encoding_indeces = [0] * len(unique_values)
 
 		encoding_indeces[value_to_index[feature_value]] = 1 
 
-		for i, index in enumerate(encoding_indeces):
+		for i, index in enumerate(encoding_indeces): #adding new binary columns to the dict to represent each unique value of the categorical feature
 			songs_dict[song_title][f"{feature}_{i}"] = index
 
 	return songs_dict
 
 
-
-"""normalized the values of each feature of each song contained in songs_dict, using the MinMaxScaler() 
-	and uses one-hot encoding for values tthat are categorical (0 or 1) 
-
-
-	(sources: from scikit-learn.org and medium.com 'Normalize data before or after split of training and testing data?')
-	
-	X_normalized = (X - X_min) / (X_max - X_min), normalizes the values between 0 and 1 
-
-	Args:
-		x_train: dictionary {song_title: list of features values} of the TRAINING set
-		x_test: dictionary {song_title: list of features values} of the TEST set
-		
-	returns:
-	Both dictionaries but with normalized values 
 """
+    normalizes numerical variables in the input datas using MinMax or Standard Scaler.
+
+    Args:
+    - x_train (pd.DataFrame): Training data features.
+    - x_test (pd.DataFrame): Testing data features.
+    - y_train (pd.Series): Training data target variable.
+    - y_test (pd.Series): Testing data target variable.
+    - categorical_features (list, optional): List of categorical feature names. default is ['audio_mode'].
+    - scaler_type (int, optional): Type of scaler to use. 0 for MinMax Scaler, 1 for Standard Scaler. default is 0.
+
+    Returns:
+    - Tuple: Tuple containing normalized x_train, x_test, y_train, and y_test.
+    """
+
 def normalizer(x_train, x_test, y_train, y_test ,categorical_features= ['audio_mode'], scaler_type = 0): #if Scaler is 0 it uses MInMax, 1 it uses  Standard 
-	#normalizing num values with MinMax Scaler 
+	
 	
 	#convert dictionnaries to dataframes :
 	df_train = pd.DataFrame.from_dict(x_train, orient = 'index')
@@ -265,9 +264,10 @@ to find where data is missing and if there are outliers, and to summarize the da
 """Creates a figure, histogram , or actives an existing one to display the distribution of the model's target variable (in this case it's the popylarity scores)
 (sources: matplot.pyplot.figure, matplotlib.org, python-graph-gallery.com, seaborn.pydata.org )
    We will be using SeaBorn to plot it using the histplot function. 
-	Args: 
-		feature: list of floats, the values of the feature that we want to analyse 	
-		x_label: string, label of x - axis 
+	Args: 	
+		x_label: string, label of x - axis, feature we want to analyse too
+		df: dataFrame
+		kind: if we want to show a histogram with a curve or just bars 
  """
 def target_visualization(x_label, df, kind = 'hist', bins = None):
 	plt.title(f"Distribution of {x_label} frequency")
@@ -329,6 +329,17 @@ def visualize_correlation_with_popularity(df, popularity_scores):
 	plt.title('Correlation between Song Popularity and Other Features')
 	plt.show()
 
+"""
+    Remove a specified feature from a given dataframe and update corresponding dictionaries.
+    
+    Args:
+    	df (DataFrame): Input dataframe from which the feature needs to be removed.
+    	feature (str): Name of the feature to be removed.
+    	dictionaries (list): List of dictionaries that need to be updated after removing the feature.
+    
+    Returns:
+    	DataFrame: Updated dataframe without the specified feature.
+    """
 
 def remove_feature(df, feature, dictionaries):
 	#remove the feature from the dataframe first 
@@ -342,25 +353,21 @@ def remove_feature(df, feature, dictionaries):
 
 
 
-"""finds the outliers in our dataset, Creates a boxPlot from the library SeaBorn (source: python-graph-gallery and freecodecamp.com 'How to Build a Linear Regression Model – Machine Learning Example')
-	
+"""finds the outliers in our dataset, Creates a boxPlot from the library SeaBorn (source: python-graph-gallery and freecodecamp.com 'How to Build a Linear Regression Model – Machine Learning Example')	
 """
 def identify_outliers(x_train):
 	#orient is the orientation of the data, means that the keys of the dictionnaries will be used as the index of the data frame
 	df = pd.DataFrame.from_dict(x_train, orient = "index", columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
 			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
 
-	#they're all numerical columns 
+	#they're all numerical columns  
 	all_features = df.columns
 	num_features =  len(all_features)
 	num_cols = math.ceil(num_features / 2) #2 is the number of rows 
-
-
 	
 	#we create subplots so that we can compare multiple boxplots side by side, each representing a different numerical column of our DataFrame
 	fig, ax = plt.subplots(2, num_cols, figsize=(15, 6), dpi= 100)
 
-	#sns.boxplot(x = df["song_duration"])
 	#display of all the columns boxplot side by side by iterating through each column (feature), we also get the indx of the column 
 	for i, feature in enumerate(all_features):
 		x = i // num_cols
@@ -369,7 +376,6 @@ def identify_outliers(x_train):
 		#iterate throuhh each feature and create its subplot
 		sns.boxplot(x = df[feature], ax = ax[x, y])
 		ax[x, y].set_xlabel(feature, size= 14)
-		#ax[x, y].tick_params(axis = 'x', rotation = 45)
 
 	plt.tight_layout()
 	plt.show()
@@ -388,33 +394,6 @@ def correct_outliers1(x_train, feature):
 		x_train[key][feature] = scaled_value
 
 	return x_train
-
-
-def correct_outliers_iqr(x_train, feature):
-	df = pd.DataFrame.from_dict(x_train, orient="index", columns=['song_duration', 'acousticness', 'danceability', 'energy',
-                                                                   'instrumentalness', 'key', 'liveness', 'loudness',
-                                                                   'audio_mode', 'speechiness', 'tempo', 'time_signature',
-                                                                   'audio_valence'])
-
-	#calculate the q1 and q3 
-	q1 = df[feature].quantile(0.25)
-	q3 = df[feature].quantile(0.75)
-
-	#calculate the iqr for this feature
-	IQR = q3 -  q1 
-
-	#lower and upper bounds for outliers 
-	lower = q1 - 1.5*IQR 
-	upper = q3 + 1.5*IQR 
-
-	#remove Nan values 
-	df = df[(df[feature] >= lower) & (df[feature] <= upper)]
-
-	x_train = df.to_dict(orient= 'index')
-	return x_train
-
-
-
 
 
 
@@ -631,38 +610,10 @@ if __name__ == "__main__":
 	songs_dict_train, scores_train = read_dataset('train.csv')
 	songs_dict_test, scores_test = read_dataset('test.csv')
 
-
 	df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
 			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
 	print("check null values before normalization\n")
 	print(df.isnull().sum())
-
-	#impute NaN values in scores: 
-	imputer = SimpleImputer(strategy='mean')
-
-	scores_train = np.array(scores_train)
-	scores_test = np.array(scores_test)
-
-	scores_train= imputer.fit_transform(scores_train.reshape(-1, 1)).flatten()
-	scores_test = imputer.fit_transform(scores_test.reshape(-1, 1)).flatten()
-
-	songs_dict_train, songs_dict_test, scores_train, scores_test = normalizer(songs_dict_train, songs_dict_test, scores_train, scores_test, scaler_type = 1)
-	
-	#songs_dict_train = one_hot_encode(songs_dict_train, 'audio_mode')
-	#songs_dict_train = correct_outliers_iqr(songs_dict_train, 'liveness')
-	#songs_dict_test = correct_outliers_iqr(songs_dict_test, 'liveness')
-
-	#songs_dict_train = correct_outliers1(songs_dict_train, 'liveness')
-	#songs_dict_test = correct_outliers1(songs_dict_test, 'liveness')
-
-
-
-	df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
-			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
-	print("\ncheck null values after\n") 
-	print(df.isnull().sum())
-	
-
 
 
 	if visualization == True: 
@@ -680,14 +631,14 @@ if __name__ == "__main__":
 		#target_visualization(x_label_feature, df, kind = 'hist', bins =30) #adjust bins depending on each feature 
 
 
-		all_features_visualization(df, bins = 10)
+		#all_features_visualization(df, bins = 10)
 		corr_matrix = correlation_matrix(df)
 		visualize_correlation(corr_matrix)
 
 		visualize_correlation_with_popularity(df, scores_train)
 
 		
-		identify_outliers(songs_dict_train)
+		#identify_outliers(songs_dict_train)
 	#remove_feature(df, 'instrumentalness', [songs_dict_train, songs_dict_test])
 	
 
@@ -697,6 +648,70 @@ if __name__ == "__main__":
 	#the visuals show that instrumentalness has a lot of values at 0.0 and does not influence song_popularity
 	#accousticness also have a lot of null values, should we remove it too ? 
 	#let's analyse its correlation with the target feature: 
+
+
+	#impute NaN values in scores: 
+	imputer = SimpleImputer(strategy='mean')
+
+	scores_train = np.array(scores_train)
+	scores_test = np.array(scores_test)
+
+	scores_train= imputer.fit_transform(scores_train.reshape(-1, 1)).flatten()
+	scores_test = imputer.fit_transform(scores_test.reshape(-1, 1)).flatten()
+
+	songs_dict_train, songs_dict_test, scores_train, scores_test = normalizer(songs_dict_train, songs_dict_test, scores_train, scores_test, scaler_type = 0)
+	
+	#songs_dict_train = one_hot_encode(songs_dict_train, 'audio_mode')
+	#songs_dict_train = correct_outliers_iqr(songs_dict_train, 'liveness')
+	#songs_dict_test = correct_outliers_iqr(songs_dict_test, 'liveness')
+
+	#songs_dict_train = correct_outliers1(songs_dict_train, 'liveness')
+	#songs_dict_test = correct_outliers1(songs_dict_test, 'liveness')
+
+
+
+	df = pd.DataFrame.from_dict(songs_dict_train, orient= 'index', columns = ['song_duration', 'acousticness', 'danceability', 'energy', 
+			'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 'speechiness', 'tempo', 'time_signature', 'audio_valence'])
+	print("\ncheck null values after\n") 
+	print(df.isnull().sum())
+	
+
+	if visualization == True: 
+		"""analyzing the distribution of the song_popularity variable contained in the list scores
+		Interpretation: 
+			- the curve has a single peak and is very smooth; it indicates a homogenous distribution """
+		x_label_popularity = "song_popularity"
+		df_popularity = pd.DataFrame({x_label_popularity: scores_train})
+		
+		target_visualization(x_label_popularity, df_popularity, bins= 30)
+
+
+		#now we want to visualize the distribution by other features 
+		#x_label_feature = 'acousticness' #example, change this depending on which feature you want to visualize
+		#target_visualization(x_label_feature, df, kind = 'hist', bins =30) #adjust bins depending on each feature 
+
+
+		#all_features_visualization(df, bins = 10)
+		corr_matrix = correlation_matrix(df)
+		visualize_correlation(corr_matrix)
+
+		visualize_correlation_with_popularity(df, scores_train)
+
+		
+		identify_outliers(songs_dict_train)
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 	
