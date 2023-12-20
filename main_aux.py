@@ -16,12 +16,18 @@ from sklearn.metrics import mean_absolute_error
 from sklearn.metrics import mean_squared_error
 import math 
 from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import explained_variance_score, r2_score 
+directory = './'
 
 #Target encoding for song_popularity ?? (high categorical data )
 
 
-visualization = True#change value only if you want to activate the visualization analysis 
+visualization = False #change value only if you want to activate the visualization analysis 
 debug = False #change this value only if you want to activate the fnctions for debugging
+
+model = True #change this if you want to test the linear regression model. 
+
 feature_names = ['song_duration', 'acousticness', 'danceability', 'energy', 
                  'instrumentalness', 'key', 'liveness', 'loudness', 'audio_mode', 
                  'speechiness', 'tempo', 'time_signature', 'audio_valence']
@@ -250,6 +256,12 @@ def split_lines(input, seed, output1, output2, ratio):
 		print(f"File does not exist : {input}")
 
 
+
+
+
+
+
+
 """THIS PART IS ABOUT EDA (Exploratory Data Analysis) 
 about eda: its purpose is to gain information and intuition about the data; to make comparisons between distributions; for making sure the data is on the scalre we expect it to be, and in the format it should be in; 
 to find where data is missing and if there are outliers, and to summarize the data. (source: from the book 'Doing Data Science by Cathy O'Neil and Rachel Schutt') 
@@ -442,78 +454,150 @@ def fit_linear_regression(x, y, learning_rate = 0.00001, epsilon= 0.9):
 
 
 ############################################################################################"""
-def linear_regression_loop():
-    params = init_params(train_x.shape[1])
+songs= pd.read_csv("song_data.csv")
+songs = songs.ffill()
 
-    for i in range(epoch):
-        predictions = forward(params, train_x)
-        grad = mse_grad(train_y, predictions)
+features = ["acousticness", "song_popularity","energy","key","liveness","loudness","audio_mode"]
+target_variable = "song_popularity"
+songs = songs.dropna(subset=features)
+songs = songs.drop_duplicates(subset = features)
 
-        params = backward(params, train_x, lr, grad)
-
-        if i % 5000 == 0:
-            predictions = forward(params, valid_x)
-            valid_loss = mse(valid_y, predictions)
-            #print(f"Epoch {i} loss: {valid_loss}")
+np.random.seed(0)
+split_data = np.split(songs, [int(.7 * len(songs)), int(.85 * len(songs))])
+(train_x, train_y), (valid_x, valid_y), (test_x, test_y) = [[d[features].to_numpy(), d[[target_variable]].to_numpy()] for d in split_data]
 
 
+def init_params(features): #initiliaze weights and the bias for our predictors (features)
+	np.random.seed(3)
+	weights= np.random.rand(features, 1) # nfeature weights between 0 and 1 
+	biases = np.ones((1, 1))
+	return [weights, biases]
 
-    # Make predictions on the test set
-    predictions_test = forward(params, test_x)
 
-    # Calculate MSE and MAE on the test set
-    test_mse = mse(test_y, predictions_test)
-    test_mae = mean_absolute_error(test_y, predictions_test)
-    print(f"Test MSE: {test_mse}")
-    print(f"Test MAE: {test_mae}")
+def prediction(params, x): #make predicts using weights and bias 
+	weights, bias = params 
+	prediction = x @ weights + bias #w1*x1 + w2*x2 
+	return prediction
+
+
 
 def mse(actual, predicted): # mean squared error
     return  np.mean((actual - predicted)**2)
 def mse_grad(actual, predicted):  #calcule our gradient
     return (predicted - actual)
 
-def init_params(features):  # initialize weights and the bias for our predictors(features)
-    np.random.seed(3)
-    weights = np.random.rand(features, 1) # nfeature weights between 0 and 1
-    biases = np.ones((1, 1))
-    return [weights, biases]
 
-def forward(params , x):  # make predicts using weights and bias
-    weights, bias = params
-    prediction = x @ weights + bias  # w1*x1 = w2*x2 .....
-    return prediction
+def update_params(params, x , lr, grad):
+	#x1 *g, x2 *g, x3 *g
+	w_grad = (x.T / x.shape[0]).dot(grad) #calculate the derivative, the x.shape[0] is averagind tje error across the rows 
+	b_grad = np.mean(grad, axis = 0)
+	params[0] -= w_grad * lr 
+	params[1] -= b_grad  *lr 
+	return params 
 
-#def cross_validation(model, X, y, n_splits=5, random_state=42):
+lr = 1e-4 
+epoch = 30000
 
 
-def linear_regression_loop(train_x, train_y, valid_x, valid_y, test_x, test_y, epoch = 10000, lr= 0.001):
-	 # Initialize parameters
-    params = init_params(train_x.shape[1])
+def linear_regression_loop_without_valid(train_x, train_y, test_x, test_y, epoch= 10000, lr = 0.001):
+	#to apply it to my code (still needs fixing)
+	params = init_params(train_x.shape[1])
 
-    for i in range(epoch):
-        # Forward pass
-        predictions = forward(params, train_x)
-        
-        # Compute gradient
-        grad = mse_grad(train_y, predictions)
+	for i in range(epoch):
+		predictions = forward(params, train_x)
 
-        # Backward pass
-        params = backward(params, train_x, lr, grad)
+		grad = mse_grad(train_y, predictions)
+		print(grad)
 
-        if i % 5000 == 0:
-            # Evaluate on the validation set
-            predictions = forward(params, valid_x)
-            valid_loss = mean_squared_error(valid_y, predictions)
-            print(f"Epoch {i} loss: {valid_loss}")
+		params = backward(params, train_x, lr, grad)
 
-    # Make predictions on the test set
-    predictions_test = forward(params, test_x)
+		if i% 5000 == 0:
+			predictions_test = forward(params, test_x)
 
-    # Calculate MSE and MAE on the test set
-    test_mse = mean_squared_error(test_y, predictions_test)
-    test_mae = mean_absolute_error(test_y, predictions_test)
-    print(f"Test MSE: {test_mse}")
-    print(f"Test MAE: {test_mae}")
+			test_mse = mean_squared_error(test_y, predictions_test)
+			test_mae = mean_absolute_error(test_y, predictions_test)
+
+			print(f"Epoch {i}- test MSE:  {test_mse}, test MAE: {test_mae}")
+
+	predictions_test = forward(params, test_x)
+	test_mse = mean_squared_error(test_y, predictions_test)
+	test_mae = mean_absolute_error(test_y, predictions_test)
+
+	print(f"final test MSE: {test_mse}")
+	print(f"final test MAE: {test_mae}")
+
+
+def linear_regression_loop():
+	params = init_params(train_x.shape[1])
+
+	for i in range(epoch):
+		predictions = prediction(params, train_x)
+		grad = mse_grad(train_y, predictions)
+
+		params = update_params(params, train_x, lr, grad)
+
+		if i % 5000 == 0:
+			predictions = prediction(params, valid_x)
+
+			valid_loss = mse(valid_y, predictions)
+			print(f"Epoch {i} loss: {valid_loss}")
+
+	
+	# Make predictions on the test set
+
+	predictions_test = prediction(params, test_x)
+
+	# Calculate MSE and MAE on the test set
+
+	test_mse = mse(test_y, predictions_test)
+	test_mae = mean_absolute_error(test_y, predictions_test)
+	print(f"Test MSE: {test_mse}")
+	print(f"Test MAE: {test_mae}")
+
+def visualize_correlation(features_correlation, title):
+# Function to visualize correlation using scatter plot
+	plt.scatter(features_correlation.index, features_correlation)
+	plt.title(title)
+	plt.xticks(rotation=45, ha='right')
+	plt.ylabel('Correlation')
+	plt.show()
+
+
+numeric_features = songs.select_dtypes(include=[np.number]).columns
+
+# Corrélation entre song popularity et les autres features
+features_correlation_sp = songs[numeric_features].corr()['song_popularity']
+
+# Corrélation entre danceability et les autres features
+features_correlation_danceability = songs[numeric_features].corr()['danceability']
+
+# Assume you have the final weight and bias
+final_weight = 2.5
+final_bias = 1.0
+
+# Generate some sample data for demonstration
+x_data = np.random.rand(1000) * 10  # Random x values
+y_data = final_weight * x_data + final_bias + np.random.normal(0, 1, 1000)  # Linear relation with some noise
+# Plot the data points
+plt.scatter(x_data, y_data, label='Data Points')
+
+# Plot the line with the final weight and bias
+x_line = np.linspace(min(x_data), max(x_data), 1000)
+y_line = final_weight * x_line + final_bias
+plt.plot(x_line, y_line, color='red', label='Regression Line')
+
+# Add labels and legend
+plt.xlabel('X')
+plt.ylabel('Y')
+plt.legend()
+
+# Show the plot
+plt.show()
+visualize_correlation(features_correlation_danceability, 'Corrélation avec Danceability')
+# Visualize correlation with song popularity
+visualize_correlation(features_correlation_sp, 'Corrélation avec Song Popularity')
+# Visualize correlation with danceability
+linear_regression_loop()
 
 ######################################################################################
 
@@ -699,22 +783,15 @@ if __name__ == "__main__":
 
 		
 		identify_outliers(songs_dict_train)
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+		"""interprétation:la normalisation n'améliore pas visuellement les graphes de correlation, mais elle a bien entrainé une baisse de l'erreur dans les modèles. 
+(raisons possibles :
+	1. remise à l'echelle: la structure des données reste la meme mais on a mit les variables sur une echelle commune ce qui facilite et optimise la performance des modèles. 
+	2. on a réduit la multicollinéarité: la normalisation a réduit les effets de la multicollinéatité entre les variables. pour améliorer la stabilité des coefficients estimés dans certains modèles, meme si visuellement cela ne change pas beaucoup. 
+	3. réduction des effets : la normalisation est aussi sensé réduire l'influence disproportionnée de certaines variables sur le modèle ou l'analyse."""
 	
+
+
+
 	song_features = np.array([list(song.values()) for song in songs_dict_train.values()], dtype = np.float64)
 	scores_train_array = np.array(scores_train, dtype = np.float64)
 	scores_test_array = np.array(scores_test, dtype = np.float64)
@@ -760,13 +837,10 @@ if __name__ == "__main__":
 
 
 
-
+	#linear_regression_loop_without_valid(song_features, scores_train_array, songs_test, scores_test_array)
 
 
 # Example usage
 	#linear_regression_loop_with_cross_validation(songs_dict_train, scores_train)
-
-
-
 
 
